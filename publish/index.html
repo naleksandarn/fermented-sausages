@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="sr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fermentacija Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <h1>Raspored Proizvodnje</h1>
+            <button id="addBatchBtn" class="btn-primary">+ Nova Serija</button>
+        </header>
+
+        <main class="floor-plan-container">
+            <div class="chamber-group top-group">
+                <div class="chamber small" data-id="KHD1">
+                    <div class="chamber-header">KHD1</div>
+                    <div class="chamber-content"></div>
+                </div>
+                <div class="chamber small" data-id="KHD2">
+                    <div class="chamber-header">KHD2</div>
+                    <div class="chamber-content"></div>
+                </div>
+                <div class="chamber large" data-id="KZ01">
+                    <div class="chamber-header">KZ01</div>
+                    <div class="chamber-content"></div>
+                </div>
+                <div class="chamber large" data-id="KZ02">
+                    <div class="chamber-header">KZ02</div>
+                    <div class="chamber-content"></div>
+                </div>
+            </div>
+
+            <div class="chamber-group bottom-group">
+                <div class="chamber" data-id="KHD03">
+                    <div class="chamber-header">KHD03</div>
+                    <div class="chamber-content"></div>
+                </div>
+                <div class="chamber" data-id="KZ03">
+                    <div class="chamber-header">KZ03</div>
+                    <div class="chamber-content"></div>
+                </div>
+                <div class="chamber" data-id="KZ04">
+                    <div class="chamber-header">KZ04</div>
+                    <div class="chamber-content"></div>
+                </div>
+
+                <div class="dashboard-panel">
+                    <div class="dashboard-header">Pregled Stanja</div>
+                    <div class="stats-grid" id="statsContent"></div>
+                    <div class="total-summary" id="totalSummary">Učitavanje...</div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div id="batchModal" class="modal hidden">
+        <div class="modal-content">
+
+            <div class="modal-header-row" style="margin-bottom: 10px;">
+                <h2 id="modalTitle">Nova Serija</h2>
+                <div class="mode-switch">
+                    <a id="toggleWizardBtn">Prebaci na klasičan prikaz</a>
+                </div>
+            </div>
+
+            <form id="batchForm">
+
+                <div id="wizardProgress" class="wizard-progress">
+                    <div class="progress-line">
+                        <div class="progress-line-fill" id="progressFill"></div>
+                    </div>
+                    <div class="step-indicator active">1</div>
+                    <div class="step-indicator">2</div>
+                    <div class="step-indicator">3</div>
+                </div>
+
+                <div class="wizard-step active" data-step="1">
+                    <div class="form-group">
+                        <label style="font-size: 1.1rem; font-weight:bold;">Proizvod</label>
+                        <select id="productType" required style="font-size: 1.1rem; padding: 12px;">
+                            <option value="" disabled selected>Učitavanje...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label style="font-size: 1.1rem; font-weight:bold;">Datum Proizvodnje</label>
+                        <input type="date" id="productionDate" required style="font-size: 1.1rem; padding: 12px;">
+                    </div>
+                </div>
+
+                <div class="wizard-step" data-step="2">
+                    <div class="form-group">
+                        <label>Oznaka Serije</label>
+                        <input type="text" id="batchCode" required placeholder="Auto-generisano ili unesi..."
+                            style="font-size: 1.1rem;">
+                        <small style="color:#64748b;">Automatski se generiše na osnovu Koraka 1.</small>
+                    </div>
+                    <div class="form-group">
+                        <label>LOT Broj</label>
+                        <input type="text" id="lotNumber" placeholder="Unesi LOT..." style="font-size: 1.1rem;">
+                    </div>
+                </div>
+
+                <div class="wizard-step" data-step="3">
+                    <div class="form-group">
+                        <label>Broj Ramova</label>
+                        <input type="number" id="trolleyCount" required value="0" min="0" style="font-size: 1.1rem;">
+                    </div>
+                    <div class="form-group">
+                        <label>Početna Komora</label>
+                        <select id="chamberSelect" style="font-size: 1.1rem; padding: 12px;">
+                            <option value="KHD1">KHD1</option>
+                            <option value="KHD2">KHD2</option>
+                            <option value="KZ01">KZ01</option>
+                            <option value="KZ02">KZ02</option>
+                            <option value="KHD03">KHD03</option>
+                            <option value="KZ03">KZ03</option>
+                            <option value="KZ04">KZ04</option>
+                        </select>
+                    </div>
+
+                    <div
+                        style="margin-top: 15px; background: #f8fafc; padding: 10px; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 0.9rem;">
+                        <strong>Pregled unosa:</strong><br>
+                        <span id="summaryText" style="color: #475569;">Popunite polja...</span>
+                    </div>
+                </div>
+
+                <div class="wizard-actions">
+                    <button type="button" id="prevBtn" class="btn-secondary" disabled>Nazad</button>
+                    <button type="button" id="cancelBtn" class="btn-secondary" style="display: none;">Otkaži</button>
+
+                    <button type="button" id="nextBtn" class="btn-primary">Dalje</button>
+                    <button type="submit" id="submitBtn" class="btn-primary" style="display: none;">Završi i
+                        Sačuvaj</button>
+                </div>
+
+            </form>
+        </div>
+    </div>
+
+    <div id="detailsModal" class="modal hidden">
+        <div class="modal-content large-modal">
+            <div class="modal-header-row">
+                <h2 id="detailsTitle">Detalji Serije</h2>
+                <div style="margin-left: auto; display: flex; gap: 10px;">
+                    <button id="addTrolleyBtn" class="btn-primary" style="padding: 5px 15px;">+ Dodaj Kolica</button>
+                    <button id="deleteBatchBtn" class="btn-danger" style="display:none;">Obriši Seriju</button>
+                    <button id="closeDetailsBtn" class="close-x"
+                        style="font-size: 2rem; line-height: 1rem;">&times;</button>
+                </div>
+            </div>
+
+            <div class="table-scroll-container">
+                <table class="details-table">
+                    <thead>
+                        <tr>
+                            <th title="Redni broj kolica">Kolica</th>
+                            <th title="Bruto masa na početku (kg)">Bruto 1 (Start)</th>
+                            <th title="Masa praznih kolica (kg)">Masa Kolica</th>
+                            <th title="Broj štapova na kolicima">Štapovi</th>
+                            <th title="Neto = Bruto 1 - Kolica - (Štapovi * 0.4)">Neto 1</th>
+                            <th title="Broj komada proizvoda">Komada</th>
+                            <th>Akcija</th>
+                        </tr>
+                    </thead>
+                    <tbody id="trolleysTableBody"></tbody>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="form-actions" style="margin-top: 20px; text-align: right;">
+                <button type="button" id="closeDetailsBtnBottom" class="btn-secondary">Zatvori</button>
+            </div>
+        </div>
+    </div>
+    <div id="trolleyModal" class="modal hidden">
+        <div class="modal-content">
+            <h2 style="margin-bottom: 20px;">Dodaj Nova Kolica</h2>
+
+            <div class="wizard-progress">
+                <div class="progress-line">
+                    <div class="progress-line-fill" id="trolleyProgressFill"></div>
+                </div>
+                <div class="step-indicator active" id="trStep1">1</div>
+                <div class="step-indicator" id="trStep2">2</div>
+                <div class="step-indicator" id="trStep3">3</div>
+            </div>
+
+            <form id="trolleyForm">
+
+                <div class="wizard-step active" data-tr-step="1">
+                    <div class="form-group">
+                        <label>Težina Praznih Kolica (Tara)</label>
+                        <input type="number" step="0.1" id="newTrolleyTare" required value="31.0"
+                            style="font-size: 1.1rem;">
+                    </div>
+                    <div class="form-group">
+                        <label>Broj Štapova</label>
+                        <input type="number" id="newTrolleySticks" required value="20" style="font-size: 1.1rem;">
+                    </div>
+                </div>
+
+                <div class="wizard-step" data-tr-step="2">
+                    <div class="form-group">
+                        <label>Početna Bruto Masa (kg)</label>
+                        <input type="number" step="0.1" id="newTrolleyGross" placeholder="Unesi masu..."
+                            style="font-size: 1.2rem; padding: 15px; border-color: #2563eb;">
+                        <small style="color: gray;">Ako ostavite prazno, možete uneti kasnije.</small>
+                    </div>
+                </div>
+
+                <div class="wizard-step" data-tr-step="3">
+                    <div class="form-group">
+                        <label>Broj Komada</label>
+                        <input type="number" id="newTrolleyPieces" placeholder="Unesi broj komada..."
+                            style="font-size: 1.2rem; padding: 15px; border-color: #2563eb;">
+                    </div>
+
+                    <div
+                        style="margin-top:20px; background:#f0f9ff; padding:10px; border-radius:6px; border:1px solid #bae6fd; font-size: 0.9rem;">
+                        <strong>Rezime:</strong><br>
+                        Tara: <span id="summaryTare"></span> kg<br>
+                        Štapovi: <span id="summarySticks"></span><br>
+                        Bruto: <span id="summaryGross"></span> kg
+                    </div>
+                </div>
+
+                <div class="wizard-actions">
+                    <button type="button" id="trPrevBtn" class="btn-secondary" disabled>Nazad</button>
+                    <button type="button" id="trCancelBtn" class="btn-secondary">Otkaži</button>
+
+                    <button type="button" id="trNextBtn" class="btn-primary">Dalje</button>
+                    <button type="submit" id="trSubmitBtn" class="btn-primary" style="display: none;">Sačuvaj
+                        Kolica</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>

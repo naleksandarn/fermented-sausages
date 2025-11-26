@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="sr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Početna - Mesna Industrija</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Specifični stilovi za Home stranicu */
+        .menu-container {
+            max-width: 1000px;
+            margin: 40px auto;
+            text-align: center;
+        }
+
+        .welcome {
+            font-size: 1.5rem;
+            color: #475569;
+            margin-bottom: 40px;
+        }
+
+        .role-badge {
+            background: #2563eb;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 16px;
+            font-size: 0.85rem;
+            vertical-align: middle;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-left: 10px;
+        }
+
+        /* Grid za kartice */
+        .menu-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 25px;
+            padding: 10px;
+        }
+
+        /* Kartice menija */
+        .menu-card {
+            background: white;
+            padding: 35px 20px;
+            border-radius: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 1px solid #e2e8f0;
+            text-decoration: none;
+            color: #1e293b;
+            font-weight: 700;
+            font-size: 1.2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 200px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .menu-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+
+        .icon {
+            font-size: 3rem;
+            margin-bottom: 15px;
+        }
+
+        .desc {
+            font-weight: normal;
+            font-size: 0.9rem;
+            color: #64748b;
+            margin-top: 8px;
+        }
+
+        /* Boje bordura za lakše razlikovanje */
+        .card-floorplan {
+            border-bottom: 5px solid #d97706;
+        }
+
+        /* Narandžasta */
+        .card-production {
+            border-bottom: 5px solid #2563eb;
+        }
+
+        /* Plava */
+        .card-monitoring {
+            border-bottom: 5px solid #dc2626;
+        }
+
+        /* Crvena */
+        .card-packing {
+            border-bottom: 5px solid #8b5cf6;
+        }
+
+        /* Ljubičasta */
+        .card-dashboard {
+            border-bottom: 5px solid #16a34a;
+        }
+
+        /* Zelena */
+        .card-admin {
+            border-bottom: 5px solid #475569;
+        }
+
+        /* Siva */
+    </style>
+</head>
+
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <h1>Mesna Industrija - Portal</h1>
+            <button onclick="logout()" class="btn-secondary">Odjavi se</button>
+        </header>
+
+        <div class="menu-container">
+            <div class="welcome">
+                Zdravo, <span id="userName" style="font-weight: bold; color:#1e293b;">...</span>
+                <span id="userRole" class="role-badge">...</span>
+            </div>
+
+            <div class="menu-grid">
+
+                <a href="index.html" class="menu-card card-floorplan">
+                    <span class="icon">🏢</span>
+                    Pregled Pogona
+                    <span class="desc">Interaktivna mapa komora i serija</span>
+                </a>
+
+                <a href="production.html" class="menu-card card-production" id="productionBtn" style="display: none;">
+                    <span class="icon">⚙️</span>
+                    Proizvodnja
+                    <span class="desc">Kreiranje serija i upravljanje</span>
+                </a>
+
+                <a href="monitoring_menu.html" class="menu-card card-monitoring">
+                    <span class="icon">📈</span>
+                    Monitoring
+                    <span class="desc">Grafici zrenja i unos merenja</span>
+                </a>
+
+                <a href="packaging_menu.html" class="menu-card card-packing" id="packagingBtn" style="display: none;">
+                    <span class="icon">📦</span>
+                    Pakovanje
+                    <span class="desc">Finalno merenje i izlaz robe</span>
+                </a>
+
+                <div class="menu-card card-dashboard" id="dashboardBtn"
+                    style="display: none; cursor: default; opacity: 0.8;">
+                    <span class="icon">📊</span>
+                    Dashboard
+                    <span class="desc">Izveštaji i KPI (Uskoro)</span>
+                </div>
+
+                <div class="menu-card card-admin" id="adminOption"
+                    style="display: none; cursor: default; opacity: 0.8;">
+                    <span class="icon">👥</span>
+                    Korisnici
+                    <span class="desc">Administracija naloga (Uskoro)</span>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 1. Provera da li je korisnik ulogovan
+        const user = JSON.parse(localStorage.getItem('currentUser'));
+        if (!user) {
+            window.location.href = 'login.html';
+        }
+
+        // 2. Prikaz imena i role
+        document.getElementById('userName').textContent = user.username;
+
+        // Lepši prikaz role
+        let roleDisplay = user.role;
+        if (user.role === 'admin') roleDisplay = 'Administrator';
+        if (user.role === 'operater') roleDisplay = 'Operater Proizvodnje';
+        if (user.role === 'ceo') roleDisplay = 'Direktor (CEO)';
+
+        document.getElementById('userRole').textContent = roleDisplay;
+
+        // --- LOGIKA PRIKAZA DUGMADI ---
+
+        // A) Dugmad za radnike (Proizvodnja i Pakovanje)
+        if (user.role === 'admin' || user.role === 'operater') {
+            document.getElementById('productionBtn').style.display = 'flex';
+            document.getElementById('packagingBtn').style.display = 'flex';
+        }
+
+        // B) Dugmad za menadžment (Dashboard)
+        if (user.role === 'admin' || user.role === 'ceo') {
+            document.getElementById('dashboardBtn').style.display = 'flex';
+        }
+
+        // C) Dugmad samo za Admina
+        if (user.role === 'admin') {
+            document.getElementById('adminOption').style.display = 'flex';
+        }
+
+        // Funkcija za odjavu
+        function logout() {
+            localStorage.removeItem('currentUser');
+            window.location.href = 'login.html';
+        }
+    </script>
+</body>
+
+</html>

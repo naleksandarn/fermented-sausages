@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="sr">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Proizvodnja</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .menu-container {
+            max-width: 800px;
+            margin: 50px auto;
+            text-align: center;
+        }
+
+        .menu-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+
+        .menu-card {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: transform 0.2s;
+            border: 1px solid #e2e8f0;
+            text-decoration: none;
+            color: #333;
+            font-weight: bold;
+            font-size: 1.1rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 160px;
+        }
+
+        .menu-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1);
+            border-color: #2563eb;
+        }
+
+        .icon {
+            font-size: 2.5rem;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <h1>Meni Proizvodnje</h1>
+            <button onclick="window.location.href='home.html'" class="btn-secondary">← Nazad na Početnu</button>
+        </header>
+
+        <div class="menu-container">
+            <div class="menu-grid">
+                <a href="index.html?action=create" class="menu-card">
+                    <span class="icon">➕</span>
+                    Kreiranje nove partije
+                </a>
+
+                <a href="management.html" class="menu-card">
+                    <span class="icon">📋</span>
+                    Upravljanje partijama
+                </a>
+
+                <a href="products.html" class="menu-card" id="productsListBtn" style="display: none;">
+                    <span class="icon">🌭</span>
+                    Lista proizvoda
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 1. Provera bezbednosti
+        const user = JSON.parse(localStorage.getItem('currentUser'));
+        if (!user) window.location.href = 'login.html';
+
+        // 2. CEO Zaštita (ako slučajno uđe preko linka)
+        if (user.role === 'ceo') {
+            alert("Nemate pristup ovoj stranici.");
+            window.location.href = 'home.html';
+        }
+
+        // 3. Prikaz Admin opcija
+        // Ako je korisnik admin, prikazi dugme za listu proizvoda
+        if (user.role === 'admin') {
+            document.getElementById('productsListBtn').style.display = 'flex';
+        }
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="sr">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Meni Monitoringa</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .menu-container {
+            max-width: 800px;
+            margin: 50px auto;
+            text-align: center;
+        }
+
+        .menu-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-top: 40px;
+        }
+
+        .menu-card {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: transform 0.2s;
+            border: 1px solid #e2e8f0;
+            text-decoration: none;
+            color: #333;
+            font-weight: bold;
+            font-size: 1.2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 200px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        }
+
+        .menu-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1);
+            border-color: #2563eb;
+        }
+
+        .icon {
+            font-size: 3rem;
+            margin-bottom: 20px;
+        }
+
+        .desc {
+            font-weight: normal;
+            font-size: 0.9rem;
+            color: #64748b;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <h1>Monitoring Fermentacije</h1>
+            <button onclick="window.location.href='home.html'" class="btn-secondary">← Nazad na Početnu</button>
+        </header>
+
+        <div class="menu-container">
+            <div class="menu-grid">
+
+                <a href="monitoring.html" class="menu-card" style="border-bottom: 5px solid #ef4444;">
+                    <span class="icon">📊</span>
+                    Analiza i Grafici
+                    <span class="desc">Pregled pH vrednosti i kala kroz vreme</span>
+                </a>
+
+                <a href="measurements.html" class="menu-card" style="border-bottom: 5px solid #2563eb;">
+                    <span class="icon">⚖️</span>
+                    Unos Merenja
+                    <span class="desc">Upisivanje pH vrednosti, mase i broja komada</span>
+                </a>
+
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Provera logovanja
+        const user = JSON.parse(localStorage.getItem('currentUser'));
+        if (!user) window.location.href = 'login.html';
+    </script>
+</body>
+
+</html>

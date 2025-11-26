@@ -1,0 +1,675 @@
+:root {
+    --bg-color: #f0f2f5;
+    --text-color: #1a1a1a;
+    --primary-color: #2563eb;
+    --primary-hover: #1d4ed8;
+    --chamber-bg: #ffffff;
+    --chamber-border: #334155;
+    /* Tamno siva za zidove */
+    --batch-bg: #eff6ff;
+    --batch-border: #bfdbfe;
+    --batch-text: #1e40af;
+    --radius: 8px;
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.app-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 20px;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.app-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    background: white;
+    padding: 15px 20px;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+}
+
+.app-header h1 {
+    font-size: 1.25rem;
+    color: #333;
+}
+
+.date {
+    font-size: 0.9rem;
+    color: #64748b;
+    margin-left: 10px;
+}
+
+.btn-primary {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background 0.2s;
+}
+
+.btn-primary:hover {
+    background-color: var(--primary-hover);
+}
+
+.btn-secondary {
+    background-color: #e2e8f0;
+    color: #475569;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    margin-right: 10px;
+}
+
+.btn-secondary:hover {
+    background-color: #cbd5e1;
+}
+
+/* --- FLOOR PLAN LAYOUT --- */
+.floor-plan-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    /* Razmak između gornjeg i donjeg bloka */
+    padding: 20px;
+    background: #e2e8f0;
+    border-radius: 12px;
+    flex: 1;
+    overflow: auto;
+}
+
+.chamber-group {
+    background: var(--chamber-bg);
+    /* Opciono: padding: 2px ako želite deblje spoljne zidove */
+    border: 2px solid var(--chamber-border);
+}
+
+/* GORNJI DEO: Jednostavna mreža */
+.top-group {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1.5fr 1.5fr;
+    /* KHD su uže, KZ su šire */
+    min-height: 250px;
+}
+
+.bottom-group {
+    display: grid;
+    min-height: 400px;
+    grid-template-columns: 160px 160px 1fr;
+    grid-template-rows: 1fr 1fr;
+    grid-template-areas:
+        "khd03 kz03  dashboard"
+        "kz04  kz04  dashboard";
+}
+
+/* Mapiranje */
+.chamber[data-id="KHD03"] {
+    grid-area: khd03;
+}
+
+.chamber[data-id="KZ03"] {
+    grid-area: kz03;
+}
+
+.chamber[data-id="KZ04"] {
+    grid-area: kz04;
+}
+
+.dashboard-panel {
+    grid-area: dashboard;
+}
+
+/* --- DASHBOARD STIL --- */
+.dashboard-panel {
+    background: white;
+    border: 1px solid #cbd5e1;
+    margin: -1px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+}
+
+.dashboard-header {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin-bottom: 15px;
+    border-bottom: 2px solid #f1f5f9;
+    padding-bottom: 10px;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 15px;
+    flex: 1;
+}
+
+.stat-card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.stat-label {
+    font-size: 0.9rem;
+    color: #64748b;
+    font-weight: 600;
+    margin-bottom: 5px;
+}
+
+.stat-value {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: #2563eb;
+}
+
+.stat-unit {
+    font-size: 0.8rem;
+    color: #94a3b8;
+}
+
+.stat-card.mini .stat-value {
+    color: #d97706;
+}
+
+/* Narandžasta za Mini */
+.stat-card.bs .stat-value {
+    color: #dc2626;
+}
+
+/* Crvena za Budimsku */
+.stat-card.ku .stat-value {
+    color: #16a34a;
+}
+
+/* Zelena za Kulen */
+
+.total-summary {
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 2px solid #f1f5f9;
+    text-align: right;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #333;
+}
+
+/* --- FORM UPDATE --- */
+.form-group-row {
+    display: flex;
+    gap: 15px;
+}
+
+.form-group.half {
+    flex: 1;
+}
+
+.checkbox-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Mapiranje HTML elemenata na Grid Areas */
+.chamber[data-id="KHD03"] {
+    grid-area: khd03;
+}
+
+.chamber[data-id="KZ03"] {
+    grid-area: kz03;
+}
+
+.chamber[data-id="KZ04"] {
+    grid-area: kz04;
+}
+
+.chamber[data-id="BigRoom"] {
+    grid-area: bigroom;
+}
+
+/* Stil Komore */
+.chamber {
+    border: 1px solid var(--chamber-border);
+    margin: -1px;
+    /* Preklapanje ivica da ne budu duple */
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    position: relative;
+    transition: background-color 0.2s;
+}
+
+.chamber-header {
+    font-weight: 700;
+    font-size: 0.85rem;
+    text-align: center;
+    color: #475569;
+    margin-bottom: 10px;
+    background: #f1f5f9;
+    padding: 4px;
+    border-radius: 4px;
+    pointer-events: none;
+}
+
+.chamber-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    overflow-y: auto;
+}
+
+/* Specijalno za KZ04: Pošto je široka, neka se serije ređaju vodoravno */
+.chamber[data-id="KZ04"] .chamber-content {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-content: flex-start;
+}
+
+.chamber[data-id="KZ04"] .batch {
+    width: calc(50% - 3px);
+    /* Dve serije jedna do druge */
+}
+
+.chamber.drag-over {
+    background-color: #f0f9ff;
+    box-shadow: inset 0 0 0 2px var(--primary-color);
+    z-index: 10;
+}
+
+/* --- KARTICA SERIJE --- */
+.batch {
+    background: var(--batch-bg);
+    border: 1px solid var(--batch-border);
+    color: var(--batch-text);
+    padding: 8px 10px;
+    border-radius: 6px;
+    cursor: grab;
+    font-size: 0.9rem;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    transition: transform 0.1s;
+}
+
+.batch:hover {
+    transform: translateY(-1px);
+}
+
+.batch:active {
+    cursor: grabbing;
+}
+
+.batch-code {
+    font-weight: 700;
+    font-size: 0.95rem;
+}
+
+.batch-details {
+    font-size: 0.8rem;
+    color: #555;
+    display: flex;
+    justify-content: space-between;
+}
+
+/* --- MODAL --- */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal.hidden {
+    display: none;
+}
+
+.modal-content {
+    background: white;
+    padding: 30px;
+    border-radius: 12px;
+    width: 100%;
+    max-width: 600px;
+    /* Malo širi za komfor */
+    box-shadow: var(--shadow-md);
+
+    /* NOVO: Scroll fix */
+    max-height: 90vh;
+    /* Maksimalna visina je 90% visine ekrana */
+    overflow-y: auto;
+    /* Ako pređe visinu, pojavi se scrollbar */
+    position: relative;
+    /* Za pozicioniranje */
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 500;
+    color: #333;
+}
+
+.form-group input,
+.form-group select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-size: 1rem;
+}
+
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+
+/* Stilovi za veliki modal i tabelu */
+.modal-content.large-modal {
+    max-width: 800px;
+    /* Širi modal za tabelu */
+}
+
+.modal-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    border-bottom: 1px solid #e2e8f0;
+    padding-bottom: 10px;
+}
+
+.close-x {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #64748b;
+}
+
+.details-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+
+.details-table th,
+.details-table td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.details-table th {
+    background-color: #f8fafc;
+    color: #475569;
+    font-weight: 600;
+}
+
+.kalo-bad {
+    color: #dc2626;
+    font-weight: bold;
+}
+
+/* Crveno ako je kalo mali */
+.kalo-good {
+    color: #16a34a;
+    font-weight: bold;
+}
+
+/* Zeleno ako napreduje */
+
+.input-small {
+    width: 80px;
+    padding: 5px;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+}
+
+.btn-small {
+    padding: 5px 10px;
+    background-color: #2563eb;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.btn-danger {
+    background-color: #fee2e2;
+    color: #991b1b;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+/* Rešenje za skrolovanje tabele */
+.table-scroll-container {
+    max-height: 60vh;
+    /* Maksimalna visina je 60% ekrana */
+    overflow-y: auto;
+    /* Dodaj scrollbar vertikalno */
+    border: 1px solid #e2e8f0;
+    margin-bottom: 15px;
+    background: white;
+}
+
+/* Fiksiranje zaglavlja tabele dok se skroluje */
+.details-table thead th {
+    position: sticky;
+    top: 0;
+    background-color: #f1f5f9;
+    z-index: 1;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* Malo širi modal za ovoliko kolona */
+.modal-content.large-modal {
+    max-width: 95%;
+    /* Širi modal da stanu sve kolone */
+    width: 1200px;
+}
+
+/* --- LAYOUT ZA MONITORING --- */
+.monitoring-container {
+    display: flex;
+    height: calc(100vh - 100px);
+    /* Oduzimamo visinu headera */
+    gap: 20px;
+}
+
+.sidebar {
+    width: 300px;
+    background: white;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.sidebar-header {
+    padding: 15px;
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+    font-weight: bold;
+}
+
+.batch-list {
+    flex: 1;
+    overflow-y: auto;
+    list-style: none;
+}
+
+.batch-list-item {
+    padding: 15px;
+    border-bottom: 1px solid #f1f5f9;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.batch-list-item:hover {
+    background: #eff6ff;
+}
+
+.batch-list-item.active {
+    background: #dbeafe;
+    border-left: 4px solid #2563eb;
+}
+
+.chart-area {
+    flex: 1;
+    background: white;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+}
+
+.chart-wrapper {
+    flex: 1;
+    position: relative;
+    width: 100%;
+}
+
+/* --- WIZARD STILOVI --- */
+.wizard-step {
+    display: none;
+    /* Sakriveno po defaultu */
+    animation: fadeIn 0.3s;
+}
+
+.wizard-step.active {
+    display: block;
+    /* Prikaži samo aktivni korak */
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(5px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.wizard-progress {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    position: relative;
+}
+
+.step-indicator {
+    width: 30px;
+    height: 30px;
+    background: #e2e8f0;
+    color: #64748b;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 0.9rem;
+    z-index: 2;
+    transition: all 0.3s;
+}
+
+.step-indicator.active {
+    background: #2563eb;
+    color: white;
+}
+
+.step-indicator.completed {
+    background: #16a34a;
+    color: white;
+}
+
+.progress-line {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background: #e2e8f0;
+    z-index: 1;
+    transform: translateY(-50%);
+}
+
+.progress-line-fill {
+    height: 100%;
+    background: #2563eb;
+    width: 0%;
+    /* Menja se kroz JS */
+    transition: width 0.3s;
+}
+
+.wizard-actions {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 20px;
+    border-top: 1px solid #f1f5f9;
+    padding-top: 20px;
+}
+
+.mode-switch {
+    text-align: right;
+    margin-bottom: 10px;
+}
+
+.mode-switch a {
+    font-size: 0.85rem;
+    color: #2563eb;
+    text-decoration: underline;
+    cursor: pointer;
+}

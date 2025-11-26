@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="sr">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Monitoring Fermentacije</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <h1>Monitoring Fermentacije</h1>
+            <button onclick="window.location.href='home.html'" class="btn-secondary">← Nazad</button>
+        </header>
+
+        <div class="monitoring-container">
+            <div class="sidebar">
+                <div class="sidebar-header">Izaberite Seriju</div>
+                <ul class="batch-list" id="batchList">
+                </ul>
+            </div>
+
+            <div class="chart-area">
+                <h2 id="chartTitle" style="margin-bottom: 20px; color: #333;">Izaberite seriju za prikaz</h2>
+                <div class="chart-wrapper">
+                    <canvas id="myChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = '/api';
+        let myChart = null;
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            const user = JSON.parse(localStorage.getItem('currentUser'));
+            if (!user) window.location.href = 'login.html';
+
+            await loadBatches();
+        });
+
+        // 1. Učitaj listu serija za sidebar
+        async function loadBatches() {
+            try {
+                const res = await fetch(`${API_URL}/dashboard`);
+                const batches = await res.json();
+                const list = document.getElementById('batchList');
+
+                list.innerHTML = '';
+                batches.forEach(b => {
+                    const li = document.createElement('li');
+                    li.className = 'batch-list-item';
+                    li.innerHTML = `
+                        <strong>${b.batch_code}</strong><br>
+                        <span style="font-size:0.85rem; color:#666;">${b.product_name}</span>
+                    `;
+                    li.onclick = () => selectBatch(b, li);
+                    list.appendChild(li);
+                });
+            } catch (err) { console.error(err); }
+        }
+
+        // 2. Klik na seriju
+        async function selectBatch(batch, element) {
+            // Highlight selektovanog
+            document.querySelectorAll('.batch-list-item').forEach(el => el.classList.remove('active'));
+            element.classList.add('active');
+
+            document.getElementById('chartTitle').textContent = `Analiza: ${batch.batch_code} (${batch.product_name})`;
+
+            // Učitaj istoriju
+            try {
+                const res = await fetch(`${API_URL}/batches/${batch.id}/history`);
+                const history = await res.json();
+                processAndRenderChart(history);
+            } catch (err) { console.error(err); }
+        }
+
+        // 3. Obrada podataka i crtanje
+        function processAndRenderChart(data) {
+            // Podatke moramo grupisati po DATUMU
+            // Formatiramo podatke tako da imamo: Datum -> { SumaPH, SumaKalo, CountPH, CountKalo, ... }
+
+            const dailyStats = {};
+
+            data.forEach(item => {
+                const date = new Date(item.measured_at).toLocaleDateString('sr-RS');
+
+                if (!dailyStats[date]) {
+                    dailyStats[date] = {
+                        phSum: 0, phCount: 0,
+                        kaloSum: 0, kaloCount: 0,
+                        netWeightSum: 0, netWeightCount: 0
+                    };
+                }
+
+                // PRORAČUN NETO I KALA
+                // Formula: Neto = Bruto - Tara - (Stapovi * 0.4)
+                const tare = parseFloat(item.tare_weight);
+                const stickWeight = parseInt(item.stick_count) * 0.4;
+                const startGross = parseFloat(item.start_gross);
+                const currentGross = parseFloat(item.gross_weight);
+
+                // Start Neto
+                const startNet = (startGross - tare - stickWeight);
+                // Trenutni Neto
+                const currentNet = (currentGross - tare - stickWeight);
+
+                if (currentNet > 0 && startNet > 0) {
+                    // Kalo %
+                    const kalo = ((startNet - currentNet) / startNet) * 100;
+
+                    dailyStats[date].kaloSum += kalo;
+                    dailyStats[date].kaloCount++;
+
+                    dailyStats[date].netWeightSum += currentNet;
+                    dailyStats[date].netWeightCount++;
+                }
+
+                if (item.ph_value) {
+                    dailyStats[date].phSum += parseFloat(item.ph_value);
+                    dailyStats[date].phCount++;
+                }
+            });
+
+            // Priprema nizova za Chart.js
+            const labels = Object.keys(dailyStats); // Datumi
+            const phData = [];
+            const kaloData = [];
+
+            labels.forEach(date => {
+                const stat = dailyStats[date];
+                const avgPh = stat.phCount > 0 ? (stat.phSum / stat.phCount).toFixed(2) : null;
+                const avgKalo = stat.kaloCount > 0 ? (stat.kaloSum / stat.kaloCount).toFixed(2) : null;
+
+                phData.push(avgPh);
+                kaloData.push(avgKalo);
+            });
+
+            renderChart(labels, phData, kaloData);
+        }
+
+        function renderChart(labels, phData, kaloData) {
+            const ctx = document.getElementById('myChart').getContext('2d');
+
+            if (myChart) {
+                myChart.destroy(); // Uništi stari grafik pre crtanja novog
+            }
+
+            myChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Prosečan pH',
+                            data: phData,
+                            borderColor: '#ef4444', // Crvena
+                            backgroundColor: '#ef4444',
+                            yAxisID: 'y', // Leva osa
+                            tension: 0.3
+                        },
+                        {
+                            label: 'Prosečan Kalo (%)',
+                            data: kaloData,
+                            borderColor: '#2563eb', // Plava
+                            backgroundColor: '#2563eb',
+                            yAxisID: 'y1', // Desna osa
+                            tension: 0.3
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    scales: {
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: { display: true, text: 'pH Vrednost' },
+                            min: 4.5,
+                            max: 6.5
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            title: { display: true, text: 'Gubitak težine (%)' },
+                            grid: { drawOnChartArea: false }, // Da se ne preklapaju linije
+                            min: 0,
+                            max: 45
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+
+</html>

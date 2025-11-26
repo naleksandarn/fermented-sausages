@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="sr">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Merenje gotovog proizvoda</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .layout {
+            display: flex;
+            gap: 20px;
+            height: calc(100vh - 100px);
+        }
+
+        .sidebar {
+            width: 300px;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            overflow-y: auto;
+        }
+
+        .main-content {
+            flex: 1;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .batch-item {
+            padding: 15px;
+            border-bottom: 1px solid #f1f5f9;
+            cursor: pointer;
+        }
+
+        .batch-item:hover {
+            background: #f5f3ff;
+        }
+
+        .batch-item.active {
+            background: #ede9fe;
+            border-left: 4px solid #8b5cf6;
+        }
+
+        .trolley-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .trolley-card {
+            padding: 20px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: #f8fafc;
+        }
+
+        .trolley-card:hover {
+            border-color: #8b5cf6;
+            transform: translateY(-2px);
+        }
+
+        .trolley-number {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .trolley-label {
+            font-size: 0.8rem;
+            color: #666;
+        }
+
+        /* Input forma */
+        .input-panel {
+            display: none;
+            margin-top: 20px;
+            padding: 20px;
+            background: #f5f3ff;
+            border-radius: 8px;
+            border: 1px solid #ddd6fe;
+        }
+
+        .btn-pack {
+            background: #8b5cf6;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        .btn-pack:hover {
+            background: #7c3aed;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <h1>Pakovanje - Merenje</h1>
+            <button onclick="window.location.href='packaging_menu.html'" class="btn-secondary">← Nazad</button>
+        </header>
+
+        <div class="layout">
+            <div class="sidebar">
+                <div style="padding:15px; font-weight:bold; background:#f8fafc; border-bottom:1px solid #e2e8f0;">
+                    Aktivne Serije
+                </div>
+                <div id="batchList">Loading...</div>
+            </div>
+
+            <div class="main-content">
+                <h2 id="contentTitle" style="color:#475569;">Izaberite seriju sa leve strane</h2>
+
+                <div id="trolleyContainer" class="trolley-grid"></div>
+
+                <div id="inputPanel" class="input-panel">
+                    <h3>Pakovanje Kolica #<span id="selectedTrolleyNum"></span></h3>
+                    <input type="hidden" id="selectedTrolleyId">
+
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-top:15px;">
+                        <div>
+                            <label>Datum Pakovanja</label>
+                            <input type="date" id="packDate" class="form-control" style="width:100%; padding:10px;">
+                        </div>
+                        <div>
+                            <label>Bruto Masa (kg)</label>
+                            <input type="number" step="0.1" id="packWeight"
+                                style="width:100%; padding:10px; font-size:1.2rem; border:2px solid #8b5cf6; border-radius:6px;">
+                        </div>
+                    </div>
+                    <div style="margin-top:15px;">
+                        <label>pH (Opciono)</label>
+                        <input type="number" step="0.01" id="packPh" style="width:100px; padding:5px;">
+                    </div>
+
+                    <button class="btn-pack" onclick="submitPacking()">POTVRDI I SKINI SA STANJA</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = '/api'; // Relativna putanja
+        let currentBatchId = null;
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            const user = JSON.parse(localStorage.getItem('currentUser'));
+            if (!user) window.location.href = 'login.html';
+
+            // Postavi današnji datum
+            document.getElementById('packDate').valueAsDate = new Date();
+            await loadBatches();
+        });
+
+        async function loadBatches() {
+            const list = document.getElementById('batchList');
+            try {
+                const res = await fetch(`${API_URL}/packaging/active`);
+                const batches = await res.json();
+
+                list.innerHTML = '';
+                if (batches.length === 0) {
+                    list.innerHTML = '<div style="padding:15px;">Nema aktivnih serija.</div>';
+                    return;
+                }
+
+                batches.forEach(b => {
+                    const div = document.createElement('div');
+                    div.className = 'batch-item';
+                    div.innerHTML = `<strong>${b.batch_code}</strong><br><span style="font-size:0.85rem; color:#666;">${b.product_name}</span>`;
+                    div.onclick = () => selectBatch(b.id, b.batch_code, div);
+                    list.appendChild(div);
+                });
+            } catch (err) { console.error(err); }
+        }
+
+        async function selectBatch(id, code, element) {
+            currentBatchId = id;
+            // UI Highlight
+            document.querySelectorAll('.batch-item').forEach(el => el.classList.remove('active'));
+            element.classList.add('active');
+
+            document.getElementById('contentTitle').textContent = `Serija: ${code} - Izaberite kolica za pakovanje`;
+            document.getElementById('inputPanel').style.display = 'none';
+
+            await loadTrolleys(id);
+        }
+
+        async function loadTrolleys(batchId) {
+            const container = document.getElementById('trolleyContainer');
+            container.innerHTML = 'Učitavanje...';
+            try {
+                const res = await fetch(`${API_URL}/packaging/batches/${batchId}/trolleys`);
+                const trolleys = await res.json();
+
+                container.innerHTML = '';
+                if (trolleys.length === 0) {
+                    container.innerHTML = '<p>Sva kolica su spakovana!</p>';
+                    return;
+                }
+
+                trolleys.forEach(t => {
+                    const card = document.createElement('div');
+                    card.className = 'trolley-card';
+                    card.innerHTML = `
+                        <div class="trolley-number">#${t.trolley_number}</div>
+                        <div class="trolley-label">Tara: ${t.tare_weight}</div>
+                    `;
+                    card.onclick = () => openInput(t);
+                    container.appendChild(card);
+                });
+            } catch (err) { console.error(err); }
+        }
+
+        function openInput(trolley) {
+            document.getElementById('inputPanel').style.display = 'block';
+            document.getElementById('selectedTrolleyId').value = trolley.id;
+            document.getElementById('selectedTrolleyNum').textContent = trolley.trolley_number;
+            document.getElementById('packWeight').value = '';
+            document.getElementById('packPh').value = '';
+            document.getElementById('packWeight').focus();
+
+            // Scroll to bottom
+            document.getElementById('inputPanel').scrollIntoView({ behavior: "smooth" });
+        }
+
+        async function submitPacking() {
+            const trolleyId = document.getElementById('selectedTrolleyId').value;
+            const weight = document.getElementById('packWeight').value;
+            const ph = document.getElementById('packPh').value;
+            const date = document.getElementById('packDate').value;
+
+            if (!weight) { alert("Unesite masu!"); return; }
+
+            try {
+                const res = await fetch(`${API_URL}/packaging/pack`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        trolleyId,
+                        weight,
+                        ph: ph || null,
+                        date,
+                        batchId: currentBatchId
+                    })
+                });
+
+                const result = await res.json();
+                if (result.success) {
+                    // Sakrij panel
+                    document.getElementById('inputPanel').style.display = 'none';
+                    // Osveži listu kolica (Spakovana kolica će nestati)
+                    await loadTrolleys(currentBatchId);
+
+                    if (result.batchStatus === 'closed') {
+                        alert("Cela serija je spakovana i arhivirana!");
+                        await loadBatches(); // Osveži listu serija
+                        document.getElementById('contentTitle').textContent = "Izaberite seriju";
+                        document.getElementById('trolleyContainer').innerHTML = '';
+                    }
+                } else {
+                    alert("Greška pri pakovanju.");
+                }
+            } catch (err) {
+                console.error(err);
+                alert("Greška servera.");
+            }
+        }
+    </script>
+</body>
+
+</html>

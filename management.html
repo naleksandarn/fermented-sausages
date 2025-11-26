@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="sr">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Upravljanje Serijama</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .table-wrapper {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 900px;
+        }
+
+        th,
+        td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        th {
+            background-color: #f8fafc;
+            font-weight: 600;
+            color: #475569;
+        }
+
+        tr:hover {
+            background-color: #f1f5f9;
+        }
+
+        .filters {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .filters input,
+        .filters select {
+            padding: 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            flex: 1;
+        }
+
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .status-ok {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .status-warn {
+            background: #fef9c3;
+            color: #854d0e;
+        }
+
+        .status-late {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <h1>Upravljanje Serijama (Lista)</h1>
+            <button onclick="window.location.href='production.html'" class="btn-secondary">← Nazad</button>
+        </header>
+
+        <main class="floor-plan-container" style="display: block;">
+
+            <div class="filters">
+                <input type="text" id="searchInput" placeholder="Pretraži po Kodu ili LOT-u...">
+                <select id="productFilter">
+                    <option value="">Svi proizvodi</option>
+                </select>
+                <select id="statusFilter">
+                    <option value="">Svi statusi</option>
+                    <option value="late">Kasni</option>
+                    <option value="ok">U roku</option>
+                </select>
+            </div>
+
+            <div class="table-wrapper">
+                <table id="batchesTable">
+                    <thead>
+                        <tr>
+                            <th>Kod Serije</th>
+                            <th>LOT Broj</th>
+                            <th>Proizvod</th>
+                            <th>Komora</th>
+                            <th>Ramova</th>
+                            <th>Starost (Dani)</th>
+                            <th>Preostalo</th>
+                            <th>Status</th>
+                            <th>Akcija</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const API_URL = '/api';
+        let allBatches = [];
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            const user = JSON.parse(localStorage.getItem('currentUser'));
+            if (!user) window.location.href = 'login.html';
+
+            // Ako je CEO, nema pristup (opciono, ali dobra praksa)
+            // if (user.role === 'ceo') window.location.href = 'home.html';
+
+            await loadData();
+            await loadProductsForFilter(); // Popuni filter proizvoda
+
+            // Event listeneri za filtere
+            document.getElementById('searchInput').addEventListener('input', renderTable);
+            document.getElementById('productFilter').addEventListener('change', renderTable);
+            document.getElementById('statusFilter').addEventListener('change', renderTable);
+        });
+
+        async function loadData() {
+            try {
+                const res = await fetch(`${API_URL}/dashboard`);
+                allBatches = await res.json();
+                renderTable();
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function loadProductsForFilter() {
+            try {
+                const res = await fetch(`${API_URL}/products`);
+                const products = await res.json();
+                const select = document.getElementById('productFilter');
+
+                // Očisti stare opcije osim prve
+                select.innerHTML = '<option value="">Svi proizvodi</option>';
+
+                products.forEach(p => {
+                    const opt = document.createElement('option');
+                    opt.value = p.name;
+                    opt.textContent = p.name;
+                    select.appendChild(opt);
+                });
+            } catch (err) { console.error("Greška pri učitavanju filtera proizvoda"); }
+        }
+
+        function renderTable() {
+            const tbody = document.querySelector('#batchesTable tbody');
+            tbody.innerHTML = '';
+
+            const search = document.getElementById('searchInput').value.toLowerCase();
+            const prodFilter = document.getElementById('productFilter').value;
+            const statusFilter = document.getElementById('statusFilter').value;
+
+            const filtered = allBatches.filter(b => {
+                // Pretraga po Kodu ILI po LOT-u
+                const matchCode = b.batch_code.toLowerCase().includes(search);
+                const matchLot = (b.lot_number || '').toLowerCase().includes(search);
+                const matchesSearch = matchCode || matchLot;
+
+                const matchesProd = prodFilter === '' || b.product_name === prodFilter;
+
+                let matchesStatus = true;
+                if (statusFilter === 'late') matchesStatus = b.days_remaining < 0;
+                if (statusFilter === 'ok') matchesStatus = b.days_remaining >= 0;
+
+                return matchesSearch && matchesProd && matchesStatus;
+            });
+
+            filtered.forEach(b => {
+                const daysLeft = parseInt(b.days_remaining);
+                let statusClass = 'status-ok';
+                let statusText = 'U roku';
+
+                if (daysLeft < 0) {
+                    statusClass = 'status-late';
+                    statusText = `Kasni ${Math.abs(daysLeft)} dana`;
+                } else if (daysLeft < 5) {
+                    statusClass = 'status-warn';
+                    statusText = 'Uskoro pakovanje';
+                }
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td style="font-weight:bold;">${b.batch_code}</td>
+                    <td>${b.lot_number || '-'}</td> <td>${b.product_name}</td>
+                    <td>${b.current_chamber}</td>
+                    <td>${b.trolley_count}</td>
+                    <td>${b.days_old} / ${b.target_duration_days}</td>
+                    <td>${daysLeft}</td>
+                    <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                    <td>
+                        <button class="btn-primary" style="padding: 5px 10px; font-size: 0.8rem;" onclick="goToMap()">
+                            Pronađi na mapi
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function goToMap() {
+            window.location.href = 'index.html';
+        }
+    </script>
+</body>
+
+</html>

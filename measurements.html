@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="sr">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Unos Merenja</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* Specifični stilovi za ovu stranicu */
+        .filters-bar {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .filters-bar input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+        }
+
+        .table-wrapper {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        th {
+            background-color: #f8fafc;
+            font-weight: 600;
+            color: #475569;
+        }
+
+        tr:hover {
+            background-color: #f1f5f9;
+        }
+
+        .btn-action {
+            background-color: #2563eb;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .btn-new {
+            background-color: #16a34a;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            margin-right: 10px;
+        }
+
+        .btn-edit {
+            background-color: #e0f2fe;
+            color: #0369a1;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 5px;
+        }
+
+        .btn-danger {
+            background-color: #fee2e2;
+            color: #991b1b;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        /* Wizard stilovi prilagođeni za merenje */
+        .kalo-badge {
+            position: absolute;
+            top: 0;
+            right: 0;
+            background: #f1f5f9;
+            padding: 10px 15px;
+            border-radius: 8px;
+            border: 1px solid #cbd5e1;
+            text-align: right;
+        }
+
+        .kalo-val {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #2563eb;
+        }
+
+        .kalo-label {
+            font-size: 0.8rem;
+            color: #64748b;
+        }
+
+        .trolley-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .trolley-btn {
+            padding: 15px 0;
+            background: #f8fafc;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+        }
+
+        .trolley-btn:hover {
+            border-color: #2563eb;
+            color: #2563eb;
+        }
+
+        .trolley-btn.selected {
+            background: #2563eb;
+            color: white;
+            border-color: #2563eb;
+        }
+
+        .info-box {
+            margin-top: 20px;
+            background: #f0fdf4;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #bbf7d0;
+            font-size: 0.9rem;
+            color: #166534;
+        }
+
+        .input-small {
+            width: 80px;
+            padding: 5px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <div style="display:flex; align-items:center;">
+                <button onclick="openMeasurementWizard()" class="btn-new">+ Novo Merenje</button>
+                <button onclick="window.location.href='monitoring_menu.html'" class="btn-secondary">← Nazad</button>
+            </div>
+            <h1>Unos Merenja</h1>
+        </header>
+
+        <main class="floor-plan-container" style="display: block;">
+
+            <div class="filters-bar">
+                <input type="text" id="searchBatch" placeholder="Pretraži po Seriji...">
+                <input type="text" id="searchLot" placeholder="Pretraži po LOT-u...">
+            </div>
+
+            <div class="table-wrapper">
+                <table id="measurementTable">
+                    <thead>
+                        <tr>
+                            <th>Oznaka Serije</th>
+                            <th>LOT Broj</th>
+                            <th>Proizvod</th>
+                            <th>Komora</th>
+                            <th>Starost</th>
+                            <th>Akcija</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+
+    <div id="measureModal" class="modal hidden">
+        <div class="modal-content">
+            <h2 id="measureTitle">Merenje</h2>
+
+            <div class="wizard-progress">
+                <div class="progress-line">
+                    <div class="progress-line-fill" id="progressFill"></div>
+                </div>
+                <div class="step-indicator active" id="s1">1</div>
+                <div class="step-indicator" id="s2">2</div>
+                <div class="step-indicator" id="s3">3</div>
+                <div class="step-indicator" id="s4">4</div>
+                <div class="step-indicator" id="s5">5</div>
+                <div class="step-indicator" id="s6">6</div>
+            </div>
+
+            <form id="measureForm">
+                <div class="wizard-step active" data-step="1">
+                    <div class="form-group">
+                        <label style="font-size:1.2rem;">Datum Merenja</label>
+                        <input type="date" id="mDate" required style="font-size:1.2rem; padding:10px;">
+                    </div>
+                </div>
+
+                <div class="wizard-step" data-step="2">
+                    <div class="form-group">
+                        <label style="font-size:1.2rem;">Izaberite Seriju / LOT</label>
+                        <select id="mLotSelect" style="font-size:1.1rem; padding:12px; width:100%;" size="5">
+                        </select>
+                    </div>
+                </div>
+
+                <div class="wizard-step" data-step="3">
+                    <label style="font-size:1.2rem; margin-bottom:10px; display:block;">Izaberite Kolica</label>
+                    <div id="trolleyGrid" class="trolley-grid"></div>
+                    <input type="hidden" id="selectedTrolleyId">
+                </div>
+
+                <div class="wizard-step" data-step="4" style="position: relative;">
+                    <div class="kalo-badge">
+                        <div class="kalo-label">Trenutni Kalo</div>
+                        <div class="kalo-val" id="kaloDisplay">0.00%</div>
+                    </div>
+                    <div class="form-group">
+                        <label style="font-size:1.2rem;">Bruto Masa (kg)</label>
+                        <input type="number" step="0.1" id="mWeight" placeholder="0.00"
+                            style="font-size:1.5rem; padding:15px; border-color:#2563eb;">
+                    </div>
+                    <div class="info-box">
+                        <strong>Podaci za proveru:</strong><br>
+                        Tara: <span id="checkTare">0</span> kg | Štapovi: <span id="checkSticks">0</span> | Komada:
+                        <span id="checkPieces">0</span><br>
+                        Start Neto: <span id="checkStartNet">0</span> kg
+                    </div>
+                </div>
+
+                <div class="wizard-step" data-step="5">
+                    <div class="form-group">
+                        <label style="font-size:1.2rem;">pH Vrednost</label>
+                        <input type="number" step="0.01" id="mPh" placeholder="npr. 5.40"
+                            style="font-size:1.5rem; padding:15px;">
+                        <small style="color:gray;">Ostavite prazno ako niste merili.</small>
+                    </div>
+                </div>
+
+                <div class="wizard-step" data-step="6">
+                    <h3>Pregled unosa</h3>
+                    <ul style="list-style:none; padding:0; margin-top:15px; font-size:1.1rem; line-height:1.8;">
+                        <li>📅 Datum: <strong id="revDate"></strong></li>
+                        <li>📦 Serija: <strong id="revBatch"></strong></li>
+                        <li>🛒 Kolica: <strong>#<span id="revTrolley"></span></strong></li>
+                        <li>⚖️ Bruto: <strong id="revWeight"></strong> kg</li>
+                        <li>🧪 pH: <strong id="revPh"></strong></li>
+                    </ul>
+                </div>
+
+                <div class="wizard-actions">
+                    <button type="button" id="prevBtn" class="btn-secondary" disabled>Nazad</button>
+                    <button type="button" id="cancelBtn" class="btn-secondary">Otkaži</button>
+                    <button type="button" id="nextBtn" class="btn-primary">Dalje</button>
+                    <button type="submit" id="submitBtn" class="btn-primary" style="display: none;">Sačuvaj
+                        Merenje</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="historyModal" class="modal hidden">
+        <div class="modal-content large-modal">
+            <div class="modal-header-row">
+                <h2 id="historyTitle">Istorija Merenja</h2>
+                <button onclick="document.getElementById('historyModal').classList.add('hidden')"
+                    class="close-x">&times;</button>
+            </div>
+            <div class="table-scroll-container">
+                <table class="details-table">
+                    <thead>
+                        <tr>
+                            <th>Datum</th>
+                            <th>Faza</th>
+                            <th>Kolica #</th>
+                            <th>Masa (kg)</th>
+                            <th>pH</th>
+                            <th>Komada</th>
+                            <th>Akcija</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyBody"></tbody>
+                </table>
+            </div>
+            <div style="margin-top: 10px; text-align: right;">
+                <button onclick="document.getElementById('historyModal').classList.add('hidden')"
+                    class="btn-secondary">Zatvori</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="detailsModal" class="modal hidden"></div>
+    <div id="batchModal" class="modal hidden"></div>
+    <div id="trolleyModal" class="modal hidden"></div>
+
+    <script src="script.js"></script>
+
+    <script>
+        const API_URL_LOCAL = '/api';
+        let allBatches = [];
+        let currentStep = 1;
+        const totalSteps = 6;
+
+        let wizardData = { batchId: null, trolleyId: null, trolleyNum: null, trolleyInfo: null };
+
+        const userLocal = JSON.parse(localStorage.getItem('currentUser'));
+        const isAdminLocal = (userLocal && userLocal.role === 'admin');
+
+        // --- 1. INICIJALIZACIJA ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            if (!userLocal) window.location.href = 'login.html';
+            await loadTableData();
+
+            document.getElementById('searchBatch').addEventListener('input', filterTable);
+            document.getElementById('searchLot').addEventListener('input', filterTable);
+        });
+
+        async function loadTableData() {
+            try {
+                const res = await fetch(`${API_URL_LOCAL}/dashboard`);
+                allBatches = await res.json();
+                renderTable(allBatches);
+                populateLotSelect(allBatches);
+            } catch (err) { console.error(err); }
+        }
+
+        function renderTable(data) {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+            data.forEach(b => {
+                // Admin vidi dugme Pregled
+                let historyBtn = '';
+                if (isAdminLocal) {
+                    historyBtn = `<button class="btn-secondary" style="padding: 6px 12px; margin-left: 5px;" onclick="event.stopPropagation(); openHistoryModal(${b.id}, '${b.batch_code}')">Pregled</button>`;
+                }
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td style="font-weight:bold;">${b.batch_code}</td>
+                    <td>${b.lot_number || '-'}</td>
+                    <td>${b.product_name}</td>
+                    <td>${b.current_chamber}</td>
+                    <td>${b.days_old} dana</td>
+                    <td>
+                        <button class="btn-action" onclick="event.stopPropagation(); openMeasurementWizard(${b.id})">Unesi Merenje</button>
+                        ${historyBtn}
+                    </td>
+                `;
+                // Klik na red otvara wizard kao prečica
+                tr.addEventListener('click', () => openMeasurementWizard(b.id));
+                tbody.appendChild(tr);
+            });
+        }
+
+        function filterTable() {
+            const sBatch = document.getElementById('searchBatch').value.toLowerCase();
+            const sLot = document.getElementById('searchLot').value.toLowerCase();
+
+            const filtered = allBatches.filter(b => {
+                const matchBatch = b.batch_code.toLowerCase().includes(sBatch);
+                const matchLot = (b.lot_number || '').toLowerCase().includes(sLot);
+                return matchBatch && matchLot;
+            });
+            renderTable(filtered);
+        }
+
+        // --- 2. WIZARD LOGIKA ---
+
+        window.openMeasurementWizard = function (preSelectedBatchId = null) {
+            const modal = document.getElementById('measureModal');
+            modal.classList.remove('hidden');
+
+            currentStep = 1;
+            document.getElementById('measureForm').reset();
+            document.getElementById('mDate').valueAsDate = new Date();
+            document.getElementById('kaloDisplay').textContent = '0.00%';
+            wizardData = { batchId: null, trolleyId: null, trolleyNum: null, trolleyInfo: null };
+
+            if (preSelectedBatchId) {
+                const select = document.getElementById('mLotSelect');
+                select.value = preSelectedBatchId;
+            }
+
+            updateUI();
+        };
+
+        document.getElementById('cancelBtn').onclick = () => document.getElementById('measureModal').classList.add('hidden');
+
+        document.getElementById('nextBtn').onclick = async () => {
+            if (await validateStep(currentStep)) {
+                currentStep++;
+                updateUI();
+            }
+        };
+
+        document.getElementById('prevBtn').onclick = () => {
+            if (currentStep > 1) {
+                currentStep--;
+                updateUI();
+            }
+        };
+
+        async function validateStep(step) {
+            if (step === 2) {
+                const val = document.getElementById('mLotSelect').value;
+                if (!val) { alert("Izaberite seriju!"); return false; }
+                wizardData.batchId = val;
+                await loadTrolleysForStep3(val);
+            }
+            if (step === 3) {
+                if (!wizardData.trolleyId) { alert("Izaberite kolica!"); return false; }
+            }
+            return true;
+        }
+
+        function updateUI() {
+            document.querySelectorAll('.wizard-step').forEach(s => s.classList.remove('active'));
+            document.querySelector(`.wizard-step[data-step="${currentStep}"]`).classList.add('active');
+
+            for (let i = 1; i <= totalSteps; i++) {
+                const ind = document.getElementById('s' + i);
+                ind.className = 'step-indicator';
+                if (i < currentStep) ind.classList.add('completed');
+                else if (i === currentStep) ind.classList.add('active');
+            }
+            document.getElementById('progressFill').style.width = `${((currentStep - 1) / (totalSteps - 1)) * 100}%`;
+
+            document.getElementById('prevBtn').disabled = (currentStep === 1);
+            if (currentStep === totalSteps) {
+                document.getElementById('nextBtn').style.display = 'none';
+                document.getElementById('submitBtn').style.display = 'block';
+                fillReview();
+            } else {
+                document.getElementById('nextBtn').style.display = 'block';
+                document.getElementById('submitBtn').style.display = 'none';
+            }
+        }
+
+        function populateLotSelect(data) {
+            const sel = document.getElementById('mLotSelect');
+            sel.innerHTML = '';
+            data.forEach(b => {
+                const opt = document.createElement('option');
+                opt.value = b.id;
+                opt.textContent = `${b.batch_code} | LOT: ${b.lot_number || 'N/A'} | ${b.product_name}`;
+                sel.appendChild(opt);
+            });
+        }
+
+        async function loadTrolleysForStep3(batchId) {
+            const grid = document.getElementById('trolleyGrid');
+            grid.innerHTML = 'Učitavanje...';
+            try {
+                const res = await fetch(`${API_URL_LOCAL}/batches/${batchId}/details`);
+                const trolleys = await res.json();
+                grid.innerHTML = '';
+
+                trolleys.forEach(t => {
+                    const btn = document.createElement('div');
+                    btn.className = 'trolley-btn';
+                    btn.textContent = t.trolley_number;
+                    btn.onclick = () => {
+                        document.querySelectorAll('.trolley-btn').forEach(b => b.classList.remove('selected'));
+                        btn.classList.add('selected');
+
+                        wizardData.trolleyId = t.id;
+                        wizardData.trolleyNum = t.trolley_number;
+                        wizardData.trolleyInfo = t;
+                        fillInfoBox(t);
+                    };
+                    grid.appendChild(btn);
+                });
+            } catch (err) { grid.innerHTML = 'Greška.'; }
+        }
+
+        function fillInfoBox(t) {
+            const tare = parseFloat(t.tare_weight);
+            const sticks = parseInt(t.stick_count) || 0;
+            const pieces = t.current_pieces || 0;
+
+            const startGross = parseFloat(t.start_gross) || 0;
+            const stickWeight = sticks * 0.4;
+            const startNet = (startGross > 0) ? (startGross - tare - stickWeight) : 0;
+
+            document.getElementById('checkTare').textContent = tare.toFixed(2);
+            document.getElementById('checkSticks').textContent = sticks;
+            document.getElementById('checkPieces').textContent = pieces;
+            document.getElementById('checkStartNet').textContent = startNet.toFixed(2);
+
+            // Reset
+            document.getElementById('mWeight').value = '';
+            document.getElementById('mPh').value = '';
+            document.getElementById('kaloDisplay').textContent = "0.00%";
+        }
+
+        // Reaktivni Kalo
+        document.getElementById('mWeight').addEventListener('input', (e) => {
+            const currentGross = parseFloat(e.target.value);
+            const t = wizardData.trolleyInfo;
+            if (!t || !currentGross) return;
+
+            const tare = parseFloat(t.tare_weight);
+            const stickWeight = (parseInt(t.stick_count) || 0) * 0.4;
+            const startGross = parseFloat(t.start_gross) || 0;
+            const startNet = startGross - tare - stickWeight;
+            const currentNet = currentGross - tare - stickWeight;
+
+            if (startNet > 0) {
+                const kalo = ((startNet - currentNet) / startNet) * 100;
+                document.getElementById('kaloDisplay').textContent = kalo.toFixed(2) + '%';
+                document.getElementById('kaloDisplay').style.color = kalo > 30 ? '#16a34a' : '#2563eb';
+            }
+        });
+
+        function fillReview() {
+            const sel = document.getElementById('mLotSelect');
+            const batchTxt = sel.options[sel.selectedIndex]?.text;
+
+            document.getElementById('revDate').textContent = document.getElementById('mDate').value;
+            document.getElementById('revBatch').textContent = batchTxt;
+            document.getElementById('revTrolley').textContent = wizardData.trolleyNum;
+            document.getElementById('revWeight').textContent = document.getElementById('mWeight').value || '-';
+            document.getElementById('revPh').textContent = document.getElementById('mPh').value || '-';
+        }
+
+        // Slanje Merenja
+        document.getElementById('measureForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const weightVal = document.getElementById('mWeight').value;
+            const phVal = document.getElementById('mPh').value;
+            const dateVal = document.getElementById('mDate').value;
+
+            if (!weightVal && !phVal) {
+                alert("Morate uneti bar jedan podatak (Masa ili pH)!");
+                return;
+            }
+
+            const payload = {
+                trolleyId: wizardData.trolleyId,
+                weight: weightVal ? parseFloat(weightVal) : null,
+                ph: phVal ? parseFloat(phVal) : null,
+                pieces: wizardData.trolleyInfo.current_pieces || 0,
+                phase: 'FERMENTACIJA',
+                date: dateVal
+            };
+
+            try {
+                const res = await fetch(`${API_URL_LOCAL}/measurements`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    alert("Merenje sačuvano!");
+                    document.getElementById('measureModal').classList.add('hidden');
+                } else { alert("Greška."); }
+            } catch (err) { alert("Server greška."); }
+        });
+
+        // --- 3. ISTORIJA (ADMIN) ---
+
+        window.openHistoryModal = async function (batchId, batchCode) {
+            const modal = document.getElementById('historyModal');
+            document.getElementById('historyTitle').textContent = `Istorija: ${batchCode}`;
+            modal.classList.remove('hidden');
+            await loadHistoryTable(batchId);
+        };
+
+        async function loadHistoryTable(batchId) {
+            const tbody = document.getElementById('historyBody');
+            tbody.innerHTML = '<tr><td colspan="7">Učitavanje...</td></tr>';
+
+            try {
+                const res = await fetch(`${API_URL_LOCAL}/batches/${batchId}/history`);
+                const data = await res.json();
+                tbody.innerHTML = '';
+
+                data.forEach(m => {
+                    const dateObj = new Date(m.measured_at);
+                    const dateStr = dateObj.toLocaleDateString('sr-RS');
+                    const isoDate = dateObj.toISOString().split('T')[0];
+
+                    const tr = document.createElement('tr');
+                    tr.id = `row-${m.measurement_id}`;
+                    tr.innerHTML = `
+                        <td><span class="view-mode">${dateStr}</span><input type="date" class="edit-mode input-small" value="${isoDate}" style="display:none"></td>
+                        <td>${m.phase}</td>
+                        <td><strong>#${m.trolley_number}</strong></td>
+                        <td><span class="view-mode">${m.gross_weight}</span><input type="number" step="0.1" class="edit-mode input-small" value="${m.gross_weight}" style="display:none; width:70px;"></td>
+                        <td><span class="view-mode">${m.ph_value || '-'}</span><input type="number" step="0.01" class="edit-mode input-small" value="${m.ph_value || ''}" style="display:none; width:60px;"></td>
+                        <td><span class="view-mode">${m.piece_count || '-'}</span><input type="number" class="edit-mode input-small" value="${m.piece_count || ''}" style="display:none; width:60px;"></td>
+                        <td>
+                            <button class="btn-edit view-mode" onclick="toggleEditRow(${m.measurement_id})">Izmeni</button>
+                            <button class="btn-danger view-mode" onclick="deleteMeasurement(${m.measurement_id}, ${batchId})">Obriši</button>
+                            
+                            <button class="btn-primary edit-mode" style="display:none; padding:4px 8px;" onclick="saveEditedMeasurement(${m.measurement_id}, ${batchId})">Sačuvaj</button>
+                            <button class="btn-secondary edit-mode" style="display:none; padding:4px 8px;" onclick="toggleEditRow(${m.measurement_id})">Otkaži</button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (err) { console.error(err); }
+        }
+
+        window.toggleEditRow = function (id) {
+            const row = document.getElementById(`row-${id}`);
+            const viewEls = row.querySelectorAll('.view-mode');
+            const editEls = row.querySelectorAll('.edit-mode');
+            const isEditing = editEls[0].style.display === 'none';
+            viewEls.forEach(el => el.style.display = isEditing ? 'none' : 'inline-block');
+            editEls.forEach(el => el.style.display = isEditing ? 'inline-block' : 'none');
+        };
+
+        window.saveEditedMeasurement = async function (id, batchId) {
+            const row = document.getElementById(`row-${id}`);
+            const inputs = row.querySelectorAll('input');
+
+            try {
+                const res = await fetch(`${API_URL_LOCAL}/measurements/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        date: inputs[0].value,
+                        weight: inputs[1].value || null,
+                        ph: inputs[2].value || null,
+                        pieces: inputs[3].value || 0
+                    })
+                });
+                if (res.ok) loadHistoryTable(batchId);
+                else alert("Greška.");
+            } catch (err) { alert("Server greška."); }
+        };
+
+        window.deleteMeasurement = async function (id, batchId) {
+            if (!confirm("Obriši zapis?")) return;
+            try {
+                const res = await fetch(`${API_URL_LOCAL}/measurements_row/${id}`, { method: 'DELETE' });
+                if (res.ok) loadHistoryTable(batchId);
+                else alert("Greška.");
+            } catch (err) { alert("Server greška."); }
+        };
+
+    </script>
+</body>
+
+</html>

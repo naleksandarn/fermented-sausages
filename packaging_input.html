@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="sr">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Merenje gotovog proizvoda</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .layout {
+            display: flex;
+            gap: 20px;
+            height: calc(100vh - 200px);
+        }
+
+        /* Prilagođena visina */
+        .sidebar {
+            width: 300px;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            overflow-y: auto;
+        }
+
+        .main-content {
+            flex: 1;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* --- NOVI STILOVI ZA VELIKO DUGME I FILTERE --- */
+        .controls-bar {
+            display: flex;
+            gap: 20px;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            margin-bottom: 20px;
+            align-items: center;
+        }
+
+        .btn-wizard {
+            background-color: #8b5cf6;
+            color: white;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 700;
+
+            /* KVADRATNI OBLIK */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 120px;
+            height: 120px;
+
+            gap: 8px;
+            box-shadow: 0 10px 15px -3px rgba(139, 92, 246, 0.4);
+            transition: all 0.2s;
+            text-align: center;
+            line-height: 1.2;
+        }
+
+        .btn-wizard:hover {
+            background-color: #7c3aed;
+            transform: translateY(-3px);
+            box-shadow: 0 15px 20px -3px rgba(139, 92, 246, 0.5);
+        }
+
+        .btn-wizard:active {
+            transform: translateY(1px);
+        }
+
+        .btn-wizard span.icon-big {
+            font-size: 2.5rem;
+        }
+
+        .btn-wizard span.text {
+            font-size: 0.9rem;
+        }
+
+        .filters-wrapper {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .filters-wrapper input {
+            padding: 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            font-size: 1rem;
+        }
+
+        /* Postojeći stilovi za listu */
+        .batch-item {
+            padding: 15px;
+            border-bottom: 1px solid #f1f5f9;
+            cursor: pointer;
+        }
+
+        .batch-item:hover {
+            background: #f5f3ff;
+        }
+
+        .batch-item.active {
+            background: #ede9fe;
+            border-left: 4px solid #8b5cf6;
+        }
+
+        .trolley-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+            overflow-y: auto;
+        }
+
+        .trolley-card {
+            padding: 20px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            background: #f8fafc;
+        }
+
+        .trolley-card:hover {
+            border-color: #8b5cf6;
+            transform: translateY(-2px);
+        }
+
+        /* NOVI STILOVI ZA INFO RED U WIZARDU */
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 15px;
+            padding: 10px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+        }
+
+        .kalo-display {
+            text-align: right;
+            background: #eff6ff;
+            padding: 5px 10px;
+            border-radius: 6px;
+            border: 1px solid #bfdbfe;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <h1>Pakovanje - Merenje</h1>
+            <button onclick="window.location.href='packaging_menu.html'" class="btn-secondary">← Nazad</button>
+        </header>
+
+        <div class="controls-bar">
+            <button onclick="openPackWizard()" class="btn-wizard">
+                <span class="icon-big">⚖️</span>
+                <span class="text">Novo merenje<br>kolica</span>
+            </button>
+
+            <div style="width: 2px; height: 80px; background: #e2e8f0; margin: 0 10px;"></div>
+
+            <div class="filters-wrapper">
+                <input type="text" id="filterBatch" placeholder="Pretraži Seriju...">
+                <input type="text" id="filterLot" placeholder="Pretraži LOT...">
+            </div>
+        </div>
+
+        <div class="layout">
+            <div class="sidebar">
+                <div style="padding:15px; font-weight:bold; background:#f8fafc; border-bottom:1px solid #e2e8f0;">
+                    Aktivne Serije
+                </div>
+                <div id="batchList">Loading...</div>
+            </div>
+
+            <div class="main-content">
+                <h2 id="contentTitle" style="color:#475569;">Izaberite seriju sa leve strane</h2>
+                <div id="trolleyContainer" class="trolley-grid"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="packModal" class="modal hidden">
+        <div class="modal-content">
+            <h2 id="packTitle">Pakovanje Proizvoda</h2>
+
+            <div class="wizard-progress">
+                <div class="progress-line">
+                    <div class="progress-line-fill" id="progressFill"></div>
+                </div>
+                <div class="step-indicator active" id="s1">1</div>
+                <div class="step-indicator" id="s2">2</div>
+                <div class="step-indicator" id="s3">3</div>
+                <div class="step-indicator" id="s4">4</div>
+            </div>
+
+            <form id="packForm">
+
+                <div class="wizard-step active" data-step="1">
+                    <div class="form-group">
+                        <label style="font-size:1.2rem;">LOT Broj</label>
+                        <input type="text" id="wizLot" required placeholder="Unesi ili skeniraj..."
+                            style="font-size:1.2rem; padding:10px;">
+                    </div>
+                    <div class="form-group">
+                        <label style="font-size:1.2rem;">Broj Kolica</label>
+                        <input type="number" id="wizTrolleyNum" required placeholder="npr. 5"
+                            style="font-size:1.2rem; padding:10px;">
+                    </div>
+                    <p id="lookupError" style="color:red; display:none; margin-top:10px;">Kolica nisu pronađena ili su
+                        spakovana!</p>
+                </div>
+
+                <div class="wizard-step" data-step="2">
+                    <div class="form-group">
+                        <label>Datum Pakovanja</label>
+                        <input type="date" id="wizDate" required style="font-size:1.1rem; padding:10px; width: 100%;">
+                    </div>
+                    <div class="form-group">
+                        <label style="font-size:1.2rem;">Bruto Masa (kg)</label>
+                        <input type="number" step="0.1" id="wizWeight" required placeholder="0.00"
+                            style="font-size:1.5rem; padding:15px; border-color:#8b5cf6; width: 100%;">
+                    </div>
+
+                    <div class="info-row">
+                        <div style="font-size:0.9rem; color:#64748b;">
+                            Tara: <strong><span id="infoTare">0</span></strong> kg <br>
+                            Štapovi: <strong><span id="infoSticks">0</span></strong> <br>
+                            Start Neto: <strong><span id="infoStartNet">0</span></strong> kg
+                        </div>
+                        <div class="kalo-display">
+                            <span style="font-size:0.75rem; color:#64748b; display:block;">Trenutni Kalo</span>
+                            <span id="kaloValue" style="font-size:1.3rem; font-weight:bold; color:#2563eb;">0.00%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="wizard-step" data-step="3">
+                    <div class="form-group">
+                        <label style="font-size:1.2rem;">pH Vrednost (Opciono)</label>
+                        <input type="number" step="0.01" id="wizPh" placeholder="npr. 5.40"
+                            style="font-size:1.5rem; padding:15px;">
+                    </div>
+                </div>
+
+                <div class="wizard-step" data-step="4">
+                    <h3>Potvrda pakovanja</h3>
+                    <ul style="list-style:none; padding:0; margin-top:15px; font-size:1.1rem; line-height:1.8;">
+                        <li>📦 LOT: <strong id="revLot"></strong></li>
+                        <li>🛒 Kolica: <strong>#<span id="revNum"></span></strong></li>
+                        <li>⚖️ Masa: <strong id="revWeight"></strong> kg</li>
+                        <li>📉 Kalo: <strong id="revKalo"></strong></li>
+                        <li>🧪 pH: <strong id="revPh"></strong></li>
+                    </ul>
+                </div>
+
+                <div class="wizard-actions">
+                    <button type="button" id="prevBtn" class="btn-secondary" disabled>Nazad</button>
+                    <button type="button" id="cancelBtn" class="btn-secondary">Otkaži</button>
+                    <button type="button" id="nextBtn" class="btn-primary">Dalje</button>
+                    <button type="submit" id="submitBtn" class="btn-primary"
+                        style="display: none; background-color:#16a34a;">POTVRDI PAKOVANJE</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = '/api';
+        let allBatches = [];
+
+        // Wizard Data
+        let currentStep = 1;
+        const totalSteps = 4;
+        let packData = {
+            trolleyId: null, batchId: null,
+            tare: 0, sticks: 0, startGross: 0
+        };
+
+        // --- 1. INICIJALIZACIJA ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            const user = JSON.parse(localStorage.getItem('currentUser'));
+            if (!user) window.location.href = 'login.html';
+
+            await loadBatches();
+
+            document.getElementById('filterBatch').addEventListener('input', filterList);
+            document.getElementById('filterLot').addEventListener('input', filterList);
+        });
+
+        // --- 2. LISTA SA LEVE STRANE ---
+        async function loadBatches() {
+            try {
+                const res = await fetch(`${API_URL}/packaging/active`);
+                allBatches = await res.json();
+                renderList(allBatches);
+            } catch (err) { console.error(err); }
+        }
+
+        function renderList(data) {
+            const list = document.getElementById('batchList');
+            list.innerHTML = '';
+            if (data.length === 0) { list.innerHTML = '<div style="padding:15px;">Nema serija.</div>'; return; }
+
+            data.forEach(b => {
+                const div = document.createElement('div');
+                div.className = 'batch-item';
+                div.innerHTML = `<strong>${b.batch_code}</strong><br><span style="font-size:0.8rem;">LOT: ${b.lot_number || '-'}</span>`;
+                div.onclick = () => loadTrolleysForView(b.id, b.batch_code, div);
+                list.appendChild(div);
+            });
+        }
+
+        function filterList() {
+            const sBatch = document.getElementById('filterBatch').value.toLowerCase();
+            const sLot = document.getElementById('filterLot').value.toLowerCase();
+
+            const filtered = allBatches.filter(b => {
+                const matchBatch = b.batch_code.toLowerCase().includes(sBatch);
+                const matchLot = (b.lot_number || '').toLowerCase().includes(sLot);
+                return matchBatch && matchLot;
+            });
+            renderList(filtered);
+        }
+
+        async function loadTrolleysForView(batchId, code, element) {
+            document.querySelectorAll('.batch-item').forEach(el => el.classList.remove('active'));
+            element.classList.add('active');
+            document.getElementById('contentTitle').textContent = `Serija: ${code}`;
+
+            const container = document.getElementById('trolleyContainer');
+            container.innerHTML = 'Učitavanje...';
+            const res = await fetch(`${API_URL}/packaging/batches/${batchId}/trolleys`);
+            const trolleys = await res.json();
+
+            container.innerHTML = '';
+            if (trolleys.length === 0) container.innerHTML = '<p>Sva kolica su spakovana!</p>';
+
+            trolleys.forEach(t => {
+                const card = document.createElement('div');
+                card.className = 'trolley-card';
+                card.innerHTML = `<div class="trolley-number">#${t.trolley_number}</div>`;
+                container.appendChild(card);
+            });
+        }
+
+        // --- 3. WIZARD LOGIKA ---
+
+        window.openPackWizard = function () {
+            const modal = document.getElementById('packModal');
+            modal.classList.remove('hidden');
+            document.getElementById('packForm').reset();
+            document.getElementById('wizDate').valueAsDate = new Date();
+            document.getElementById('kaloValue').textContent = "0.00%";
+
+            currentStep = 1;
+            updateUI();
+            setTimeout(() => document.getElementById('wizLot').focus(), 100);
+        };
+
+        document.getElementById('cancelBtn').onclick = () => document.getElementById('packModal').classList.add('hidden');
+
+        document.getElementById('nextBtn').onclick = async () => {
+            if (currentStep === 1) {
+                const lot = document.getElementById('wizLot').value;
+                const num = document.getElementById('wizTrolleyNum').value;
+                if (!lot || !num) { alert("Unesite podatke!"); return; }
+
+                const res = await fetch(`${API_URL}/packaging/lookup`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ lot, trolleyNum: num })
+                });
+                const resp = await res.json();
+
+                if (resp.success) {
+                    packData = resp.data;
+                    packData.lot = lot;
+                    document.getElementById('lookupError').style.display = 'none';
+
+                    // Popuni info
+                    document.getElementById('infoTare').textContent = packData.tare_weight;
+                    document.getElementById('infoSticks').textContent = packData.stick_count;
+                    const startNet = parseFloat(packData.start_gross) - parseFloat(packData.tare_weight) - (parseInt(packData.stick_count) * 0.4);
+                    document.getElementById('infoStartNet').textContent = startNet.toFixed(2);
+                    packData.startNet = startNet;
+
+                    currentStep++;
+                    updateUI();
+                    setTimeout(() => document.getElementById('wizWeight').focus(), 100);
+                } else {
+                    document.getElementById('lookupError').style.display = 'block';
+                    document.getElementById('lookupError').textContent = resp.message;
+                }
+
+            } else if (currentStep === 2) {
+                const w = document.getElementById('wizWeight').value;
+                if (!w) { alert("Unesite masu!"); return; }
+                currentStep++;
+                updateUI();
+                setTimeout(() => document.getElementById('wizPh').focus(), 100);
+
+            } else if (currentStep === 3) {
+                currentStep++;
+                updateUI();
+                fillReview();
+            }
+        };
+
+        document.getElementById('prevBtn').onclick = () => {
+            if (currentStep > 1) { currentStep--; updateUI(); }
+        };
+
+        function updateUI() {
+            document.querySelectorAll('.wizard-step').forEach(s => s.classList.remove('active'));
+            document.querySelector(`.wizard-step[data-step="${currentStep}"]`).classList.add('active');
+
+            for (let i = 1; i <= totalSteps; i++) {
+                const ind = document.getElementById('s' + i);
+                ind.className = 'step-indicator';
+                if (i < currentStep) ind.classList.add('completed');
+                else if (i === currentStep) ind.classList.add('active');
+            }
+            document.getElementById('progressFill').style.width = `${((currentStep - 1) / (totalSteps - 1)) * 100}%`;
+
+            document.getElementById('prevBtn').disabled = (currentStep === 1);
+            if (currentStep === totalSteps) {
+                document.getElementById('nextBtn').style.display = 'none';
+                document.getElementById('submitBtn').style.display = 'block';
+            } else {
+                document.getElementById('nextBtn').style.display = 'block';
+                document.getElementById('submitBtn').style.display = 'none';
+            }
+        }
+
+        document.getElementById('wizWeight').addEventListener('input', (e) => {
+            const currentGross = parseFloat(e.target.value);
+            if (!currentGross || !packData.startNet) return;
+
+            const currentNet = currentGross - parseFloat(packData.tare_weight) - (parseInt(packData.stick_count) * 0.4);
+
+            if (packData.startNet > 0) {
+                const kalo = ((packData.startNet - currentNet) / packData.startNet) * 100;
+                document.getElementById('kaloValue').textContent = kalo.toFixed(2) + "%";
+                packData.kalo = kalo.toFixed(2);
+            }
+        });
+
+        function fillReview() {
+            document.getElementById('revLot').textContent = packData.lot;
+            document.getElementById('revNum').textContent = packData.trolley_number;
+            document.getElementById('revWeight').textContent = document.getElementById('wizWeight').value;
+            document.getElementById('revPh').textContent = document.getElementById('wizPh').value || '-';
+            document.getElementById('revKalo').textContent = document.getElementById('kaloValue').textContent;
+        }
+
+        document.getElementById('packForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const payload = {
+                trolleyId: packData.trolley_id,
+                batchId: packData.batch_id,
+                weight: document.getElementById('wizWeight').value,
+                ph: document.getElementById('wizPh').value || null,
+                date: document.getElementById('wizDate').value
+            };
+
+            try {
+                const res = await fetch(`${API_URL}/packaging/pack`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const json = await res.json();
+
+                if (json.success) {
+                    alert("Spakovano!");
+                    document.getElementById('packModal').classList.add('hidden');
+
+                    if (json.batchStatus === 'closed') {
+                        alert("Sva kolica su spakovana! Serija arhivirana.");
+                    }
+                    loadBatches();
+                    document.getElementById('trolleyContainer').innerHTML = '';
+                } else {
+                    alert("Greška: " + json.message);
+                }
+            } catch (err) { console.error(err); alert("Server greška"); }
+        });
+
+    </script>
+</body>
+
+</html>

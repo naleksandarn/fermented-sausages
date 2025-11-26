@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="sr">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Pakovanje Meni</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .menu-container {
+            max-width: 800px;
+            margin: 50px auto;
+            text-align: center;
+        }
+
+        .menu-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-top: 40px;
+        }
+
+        .menu-card {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            cursor: pointer;
+            border: 1px solid #e2e8f0;
+            text-decoration: none;
+            color: #333;
+            font-weight: bold;
+            font-size: 1.2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 200px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            transition: transform 0.2s;
+        }
+
+        .menu-card:hover {
+            transform: translateY(-5px);
+            border-color: #8b5cf6;
+        }
+
+        .icon {
+            font-size: 3rem;
+            margin-bottom: 20px;
+        }
+
+        .desc {
+            font-weight: normal;
+            font-size: 0.9rem;
+            color: #64748b;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <h1>Pakovanje</h1>
+            <button onclick="window.location.href='home.html'" class="btn-secondary">← Nazad</button>
+        </header>
+
+        <div class="menu-container">
+            <div class="menu-grid">
+
+                <a href="packaging_input.html" class="menu-card" style="border-bottom: 5px solid #8b5cf6;">
+                    <span class="icon">⚖️</span>
+                    Merenje gotovog proizvoda
+                    <span class="desc">Skidanje sa stanja i finalna vaga</span>
+                </a>
+
+                <div class="menu-card" style="opacity: 0.6; cursor: default;">
+                    <span class="icon">📋</span>
+                    Pregled pakovanja
+                    <span class="desc">Uskoro dostupno</span>
+                </div>
+
+            </div>
+        </div>
+    </div>
+    <script>
+        const user = JSON.parse(localStorage.getItem('currentUser'));
+        if (!user) window.location.href = 'login.html';
+    </script>
+</body>
+
+</html>

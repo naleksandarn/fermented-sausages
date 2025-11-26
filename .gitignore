@@ -1,0 +1,13 @@
+# Ignoriši module (oni se instaliraju, ne kopiraju se)
+node_modules/
+
+# Ignoriši sistemske fajlove
+.DS_Store
+Thumbs.db
+
+# Ignoriši logove
+npm-debug.log
+*.log
+
+# Ignoriši environment varijable (ako ih budemo imali)
+.env
