@@ -11,7 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const isCEO = (user.role === 'ceo');
     const isAdmin = (user.role === 'admin');
-    const API_URL = '/api';
+    const API_URL = '/api'; // Relativna putanja za produkciju
 
     // --- STATE PROMENLJIVE ---
     let batches = [];
@@ -30,14 +30,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // 2. UI I NAVIGACIJA
     // ============================================================
 
-    // Dodavanje dugmeta "Nazad na Meni" u header
+    // Dodavanje dugmeta "Početna" u header
     const header = document.querySelector('.app-header');
     if (header) {
-        // Provera da ne dupliramo dugme ako skripta trči više puta
+        // Provera da ne dupliramo dugme
         if (!header.querySelector('.btn-back-menu')) {
             const backBtn = document.createElement('button');
             backBtn.className = 'btn-secondary btn-back-menu';
-            backBtn.textContent = '← Nazad na Meni';
+            backBtn.innerHTML = '🏠 Početna'; // IZMENJENO
             backBtn.style.marginRight = '10px';
             backBtn.onclick = () => window.location.href = 'home.html';
             header.insertBefore(backBtn, header.firstChild);
@@ -172,10 +172,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (cancelBtn) cancelBtn.addEventListener('click', () => modal.classList.add('hidden'));
     if (batchForm) batchForm.addEventListener('submit', handleFormSubmit);
 
-    // Zatvaranje modala za detalje
-    if (closeDetailsBtn) closeDetailsBtn.addEventListener('click', () => detailsModal.classList.add('hidden'));
-    if (closeDetailsBtnBottom) closeDetailsBtnBottom.addEventListener('click', () => detailsModal.classList.add('hidden'));
-
     function updateWizardUI() {
         if (!isWizardMode) return;
 
@@ -237,7 +233,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // ============================================================
 
     if (addTrolleyBtn) {
-        // Čistimo stare listenere kloniranjem
         const newAddBtn = addTrolleyBtn.cloneNode(true);
         addTrolleyBtn.parentNode.replaceChild(newAddBtn, addTrolleyBtn);
 
@@ -543,6 +538,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // 9. DETALJI SERIJE (TABLE LOGIC)
     // ============================================================
 
+    if (closeDetailsBtn) closeDetailsBtn.addEventListener('click', () => detailsModal.classList.add('hidden'));
+    if (closeDetailsBtnBottom) closeDetailsBtnBottom.addEventListener('click', () => detailsModal.classList.add('hidden'));
+
     async function openDetailsModal(batch) {
         currentBatchIdForDetails = batch.id;
         const titleEl = document.getElementById('detailsTitle');
@@ -592,7 +590,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const gross1 = parseFloat(t.start_gross) || 0;
                 const net1 = (gross1 > 0) ? (gross1 - tare - stickWeight) : 0;
 
-                // Učitavamo pieces (Komade). Ako nema unosa, probaj default
                 const pieces = t.current_pieces || t.default_piece_count || 0;
 
                 const disabledAttr = isCEO ? 'disabled' : '';
@@ -631,13 +628,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // ============================================================
 
     window.saveMeasurement = async function (trolleyId) {
-        // Čitamo polja koja postoje u tabeli Detalji (Samo konfiguracija + Start)
         const gross1Val = document.getElementById(`gross1-${trolleyId}`).value;
         const tareVal = document.getElementById(`tare-${trolleyId}`).value;
         const sticksVal = document.getElementById(`sticks-${trolleyId}`).value;
         const piecesVal = document.getElementById(`pieces-${trolleyId}`).value;
 
-        // Provera: Mora biti uneto bar nešto
         if (!gross1Val && !piecesVal && !tareVal) {
             alert("Nema podataka za čuvanje.");
             return;
@@ -647,12 +642,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const payload = {
                 trolleyId: trolleyId,
                 weightProduction: gross1Val ? parseFloat(gross1Val) : null,
-                weight: null, // Ne diramo tekuća merenja
+                weight: null,
                 ph: null,
                 pieces: piecesVal ? parseInt(piecesVal) : null,
                 stickCount: sticksVal ? parseInt(sticksVal) : null,
                 tare: tareVal ? parseFloat(tareVal) : null,
-                phase: 'PROIZVODNJA' // Kontekst je podešavanje početka
+                phase: 'PROIZVODNJA'
             };
 
             const res = await fetch(`${API_URL}/measurements`, {
