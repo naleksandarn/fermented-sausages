@@ -59,7 +59,7 @@ app.post('/api/login', async (req, res) => {
 });
 
 // --------------------------
-// B) DASHBOARD & HOME
+// B) DASHBOARD LISTA (HOME & MEASUREMENTS)
 // --------------------------
 app.get('/api/dashboard', async (req, res) => {
     try {
@@ -90,10 +90,134 @@ app.get('/api/dashboard', async (req, res) => {
 });
 
 // --------------------------
-// C) UPRAVLJANJE SERIJAMA (BATCHES)
+// C) ANALITIKA (DASHBOARD.HTML)
+// --------------------------
+app.get('/api/analytics', async (req, res) => {
+    try {
+        const client = await pool.connect();
+
+        // 1. KPI: Ukupno Tura i Kolica
+        const kpiRes = await client.query(`
+      SELECT 
+        COUNT(DISTINCT b.id) as total_batches,
+        COUNT(t.id) as total_trolleys
+      FROM batches b
+      LEFT JOIN trolleys t ON b.id = t.batch_id
+      WHERE b.is_active = TRUE
+    `);
+
+        // 2. KPI: Ukupna Masa (Trenutna u pogonu)
+        const weightRes = await client.query(`
+        SELECT SUM(m.gross_weight) as total_weight
+        FROM measurements m
+        INNER JOIN (
+            SELECT trolley_id, MAX(measured_at) as max_date 
+            FROM measurements GROUP BY trolley_id
+        ) latest ON m.trolley_id = latest.trolley_id AND m.measured_at = latest.max_date
+        JOIN trolleys t ON m.trolley_id = t.id
+        JOIN batches b ON t.batch_id = b.id
+        WHERE b.is_active = TRUE
+    `);
+
+        // 3. GRAFIK 1: Kolica po proizvodima
+        const trolleysPerProductRes = await client.query(`
+        SELECT p.name, COUNT(t.id) as count
+        FROM trolleys t
+        JOIN batches b ON t.batch_id = b.id
+        JOIN products p ON b.product_id = p.id
+        WHERE b.is_active = TRUE
+        GROUP BY p.name ORDER BY count DESC
+    `);
+
+        // 4. GRAFIK 2: Struktura proizvodnje
+        const batchesPerProductRes = await client.query(`
+        SELECT p.name, COUNT(b.id) as count
+        FROM batches b
+        JOIN products p ON b.product_id = p.id
+        WHERE b.is_active = TRUE
+        GROUP BY p.name
+    `);
+
+        // 5. LISTA AKTIVNIH SERIJA (ZA RASPORED PAKOVANJA)
+        const activeListRes = await client.query(`
+        SELECT 
+            b.id, b.batch_code, b.production_date, b.lot_number,
+            p.name as product_name, 
+            p.target_duration_days,
+            p.standard_loss_percentage,
+            (CURRENT_DATE - b.production_date) as days_old,
+            (p.target_duration_days - (CURRENT_DATE - b.production_date)) as days_remaining,
+            COUNT(t.id) as trolley_count,
+            SUM(COALESCE(start_m.gross_weight, 0) - t.tare_weight - (t.stick_count * 0.4)) as total_net_1
+        FROM batches b
+        JOIN products p ON b.product_id = p.id
+        LEFT JOIN trolleys t ON b.id = t.batch_id
+        LEFT JOIN measurements start_m ON start_m.trolley_id = t.id AND start_m.phase = 'PROIZVODNJA'
+        WHERE b.is_active = TRUE
+        GROUP BY b.id, p.name, p.target_duration_days, p.standard_loss_percentage, b.production_date, b.lot_number
+        ORDER BY days_remaining ASC
+    `);
+
+        // 6. DETALJNA STATISTIKA PO PROIZVODIMA (TAB 2)
+        const productDetailsRes = await client.query(`
+        SELECT 
+            p.name, 
+            p.standard_loss_percentage,
+            COUNT(t.id) as total_trolleys,
+            SUM(COALESCE(start_m.gross_weight, 0) - t.tare_weight - (t.stick_count * 0.4)) as total_net_1
+        FROM batches b
+        JOIN products p ON b.product_id = p.id
+        JOIN trolleys t ON b.id = t.batch_id
+        LEFT JOIN measurements start_m ON start_m.trolley_id = t.id AND start_m.phase = 'PROIZVODNJA'
+        WHERE b.is_active = TRUE
+        GROUP BY p.name, p.standard_loss_percentage
+    `);
+
+        // 7. ISTORIJA KALA (TAB 4 - ZAVRŠENE SERIJE)
+        const historyRes = await client.query(`
+        SELECT 
+            b.batch_code,
+            p.name as product_name,
+            SUM(COALESCE(start_m.gross_weight, 0) - t.tare_weight - (t.stick_count * 0.4)) as total_net_1,
+            SUM(COALESCE(end_m.gross_weight, 0) - t.tare_weight - (t.stick_count * 0.4)) as total_net_2
+        FROM batches b
+        JOIN products p ON b.product_id = p.id
+        JOIN trolleys t ON b.id = t.batch_id
+        LEFT JOIN measurements start_m ON start_m.trolley_id = t.id AND start_m.phase = 'PROIZVODNJA'
+        LEFT JOIN measurements end_m ON end_m.trolley_id = t.id AND end_m.phase = 'PAKOVANJE'
+        WHERE b.is_active = FALSE
+        GROUP BY b.batch_code, p.name
+        HAVING SUM(COALESCE(end_m.gross_weight, 0)) > 0
+        ORDER BY b.batch_code DESC
+    `);
+
+        client.release();
+
+        res.json({
+            kpi: {
+                totalBatches: parseInt(kpiRes.rows[0].total_batches || 0),
+                totalTrolleys: parseInt(kpiRes.rows[0].total_trolleys || 0),
+                totalWeight: parseFloat(weightRes.rows[0].total_weight || 0).toFixed(1)
+            },
+            activeList: activeListRes.rows,
+            productStats: productDetailsRes.rows,
+            historyStats: historyRes.rows, // <--- NOVO
+            charts: {
+                trolleysByProduct: trolleysPerProductRes.rows,
+                structure: batchesPerProductRes.rows
+            }
+        });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Server error');
+    }
+});
+
+// --------------------------
+// D) UPRAVLJANJE SERIJAMA
 // --------------------------
 
-// Kreiranje nove serije (Kompleksna transakcija)
 app.post('/api/batches', async (req, res) => {
     const client = await pool.connect();
     try {
@@ -101,7 +225,6 @@ app.post('/api/batches', async (req, res) => {
 
         const { productCode, batchCode, lotNumber, trolleysCount, chamber, productionDate } = req.body;
 
-        // 1. Nađi ID proizvoda i njegove DEFAULT vrednosti
         const prodRes = await client.query(
             'SELECT id, default_trolley_weight, default_stick_count, default_piece_count FROM products WHERE code = $1',
             [productCode]
@@ -109,7 +232,6 @@ app.post('/api/batches', async (req, res) => {
         if (prodRes.rows.length === 0) throw new Error('Nepoznat proizvod');
         const product = prodRes.rows[0];
 
-        // 2. Ubaci Seriju
         const batchRes = await client.query(
             `INSERT INTO batches (product_id, batch_code, lot_number, current_chamber, production_date) 
        VALUES ($1, $2, $3, $4, $5) RETURNING id`,
@@ -117,7 +239,6 @@ app.post('/api/batches', async (req, res) => {
         );
         const batchId = batchRes.rows[0].id;
 
-        // 3. Ubaci Kolica (koristeći default vrednosti iz proizvoda)
         for (let i = 1; i <= trolleysCount; i++) {
             await client.query(
                 'INSERT INTO trolleys (batch_id, trolley_number, tare_weight, stick_count) VALUES ($1, $2, $3, $4)',
@@ -137,7 +258,6 @@ app.post('/api/batches', async (req, res) => {
     }
 });
 
-// Detalji serije (Karton)
 app.get('/api/batches/:id/details', async (req, res) => {
     const { id } = req.params;
     try {
@@ -148,14 +268,9 @@ app.get('/api/batches/:id/details', async (req, res) => {
         t.tare_weight,
         t.stick_count,
         p.default_piece_count, 
-        
-        -- Start bruto (Proizvodnja)
         (SELECT gross_weight FROM measurements m WHERE m.trolley_id = t.id AND m.phase = 'PROIZVODNJA' LIMIT 1) as start_gross,
-        -- Trenutno bruto (Poslednje merenje)
         (SELECT gross_weight FROM measurements m WHERE m.trolley_id = t.id ORDER BY m.measured_at DESC LIMIT 1) as current_gross,
-        -- Trenutni komadi
         (SELECT piece_count FROM measurements m WHERE m.trolley_id = t.id ORDER BY m.measured_at DESC LIMIT 1) as current_pieces,
-        -- Trenutni pH
         (SELECT ph_value FROM measurements m WHERE m.trolley_id = t.id ORDER BY m.measured_at DESC LIMIT 1) as current_ph
       FROM trolleys t
       JOIN batches b ON t.batch_id = b.id
@@ -171,7 +286,6 @@ app.get('/api/batches/:id/details', async (req, res) => {
     }
 });
 
-// Istorija merenja (Za grafik i admin pregled)
 app.get('/api/batches/:id/history', async (req, res) => {
     const { id } = req.params;
     try {
@@ -200,7 +314,6 @@ app.get('/api/batches/:id/history', async (req, res) => {
     }
 });
 
-// Premeštanje serije
 app.put('/api/batches/:id/move', async (req, res) => {
     const { id } = req.params;
     const { chamber } = req.body;
@@ -213,7 +326,6 @@ app.put('/api/batches/:id/move', async (req, res) => {
     }
 });
 
-// Brisanje serije (Cascade briše sve povezano)
 app.delete('/api/batches/:id', async (req, res) => {
     const { id } = req.params;
     try {
@@ -226,55 +338,34 @@ app.delete('/api/batches/:id', async (req, res) => {
 });
 
 // --------------------------
-// D) MERENJA (CORE LOGIC)
+// E) MERENJA (CORE LOGIC)
 // --------------------------
 
-// Unos novog merenja (ili ažuriranje početnog stanja)
 app.post('/api/measurements', async (req, res) => {
     const { trolleyId, weight, ph, phase, pieces, stickCount, tare, weightProduction, date } = req.body;
-
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-
-        // Ako je datum poslat (iz wizarda), koristi ga, inače NOW()
         const measureDate = date ? date : 'NOW()';
 
-        // 1. Ažuriraj Konfiguraciju Kolica (Tara i Štapovi)
         if (stickCount !== undefined || tare !== undefined) {
-            await client.query(
-                'UPDATE trolleys SET stick_count = COALESCE($1, stick_count), tare_weight = COALESCE($2, tare_weight) WHERE id = $3',
-                [stickCount, tare, trolleyId]
-            );
+            await client.query('UPDATE trolleys SET stick_count = COALESCE($1, stick_count), tare_weight = COALESCE($2, tare_weight) WHERE id = $3', [stickCount, tare, trolleyId]);
         }
 
-        // 2. Ažuriraj/Kreiraj 'PROIZVODNJA' red (Bruto 1 i Komadi)
-        // Ako imamo weightProduction ILI pieces (a kontekst je početni unos)
         if (weightProduction !== undefined && weightProduction !== null) {
             const check = await client.query("SELECT id FROM measurements WHERE trolley_id = $1 AND phase = 'PROIZVODNJA'", [trolleyId]);
-
             if (check.rows.length > 0) {
-                // Update postojećeg
-                await client.query(
-                    "UPDATE measurements SET gross_weight = $1, piece_count = COALESCE($2, piece_count) WHERE id = $3",
-                    [weightProduction, pieces, check.rows[0].id]
-                );
+                await client.query("UPDATE measurements SET gross_weight = $1, piece_count = COALESCE($2, piece_count) WHERE id = $3", [weightProduction, pieces, check.rows[0].id]);
             } else {
-                // Insert novog
-                await client.query(
-                    "INSERT INTO measurements (trolley_id, gross_weight, piece_count, phase, measured_at) VALUES ($1, $2, $3, 'PROIZVODNJA', $4)",
-                    [trolleyId, weightProduction, pieces, measureDate]
-                );
+                await client.query("INSERT INTO measurements (trolley_id, gross_weight, piece_count, phase, measured_at) VALUES ($1, $2, $3, 'PROIZVODNJA', $4)", [trolleyId, weightProduction, pieces, measureDate]);
             }
         } else if (pieces && !weight && !ph && !weightProduction) {
-            // Specijalan slučaj: Samo menjamo broj komada u Detaljima
             const check = await client.query("SELECT id FROM measurements WHERE trolley_id = $1 AND phase = 'PROIZVODNJA'", [trolleyId]);
             if (check.rows.length > 0) {
                 await client.query("UPDATE measurements SET piece_count = $1 WHERE id = $2", [pieces, check.rows[0].id]);
             }
         }
 
-        // 3. Upiši novo tekuće merenje (Fermentacija) - Bruto 2 / pH
         if (weight || ph) {
             await client.query(
                 `INSERT INTO measurements (trolley_id, gross_weight, ph_value, piece_count, phase, measured_at)
@@ -294,7 +385,6 @@ app.post('/api/measurements', async (req, res) => {
     }
 });
 
-// Izmena pojedinačnog reda (Admin)
 app.put('/api/measurements/:id', async (req, res) => {
     const { id } = req.params;
     const { weight, ph, pieces, date } = req.body;
@@ -310,7 +400,6 @@ app.put('/api/measurements/:id', async (req, res) => {
     }
 });
 
-// Brisanje pojedinačnog reda (Admin)
 app.delete('/api/measurements_row/:id', async (req, res) => {
     const { id } = req.params;
     try {
@@ -323,22 +412,19 @@ app.delete('/api/measurements_row/:id', async (req, res) => {
 });
 
 // --------------------------
-// E) KOLICA (TROLLEYS)
+// F) KOLICA (TROLLEYS)
 // --------------------------
 
-// Dodaj novi ram (Wizard)
 app.post('/api/batches/:id/trolleys', async (req, res) => {
     const { id } = req.params;
     const { tare, sticks } = req.body;
     try {
         const maxRes = await pool.query('SELECT COALESCE(MAX(trolley_number), 0) as max_num FROM trolleys WHERE batch_id = $1', [id]);
         const nextNum = maxRes.rows[0].max_num + 1;
-
         const insertRes = await pool.query(
             'INSERT INTO trolleys (batch_id, trolley_number, tare_weight, stick_count) VALUES ($1, $2, $3, $4) RETURNING id',
             [id, nextNum, tare || 40.0, sticks || 0]
         );
-
         res.json({ success: true, newNumber: nextNum, id: insertRes.rows[0].id });
     } catch (err) {
         console.error(err);
@@ -346,7 +432,6 @@ app.post('/api/batches/:id/trolleys', async (req, res) => {
     }
 });
 
-// Obriši ram
 app.delete('/api/trolleys/:id', async (req, res) => {
     const { id } = req.params;
     try {
@@ -359,7 +444,7 @@ app.delete('/api/trolleys/:id', async (req, res) => {
 });
 
 // --------------------------
-// F) PROIZVODI (PRODUCTS)
+// G) PROIZVODI (PRODUCTS)
 // --------------------------
 
 app.get('/api/products', async (req, res) => {
@@ -407,19 +492,13 @@ app.delete('/api/products/:id', async (req, res) => {
 });
 
 // --------------------------
-// G) PAKOVANJE (PACKAGING)
+// H) PAKOVANJE
 // --------------------------
 
-// 1. Daj mi listu serija koje imaju NEspakovana kolica (Ažurirano sa LOT-om)
 app.get('/api/packaging/active', async (req, res) => {
     try {
         const query = `
-      SELECT DISTINCT 
-        b.id, 
-        b.batch_code, 
-        b.lot_number, -- <--- OVO JE NEDOSTAJALO
-        b.product_id, 
-        p.name as product_name
+      SELECT DISTINCT b.id, b.batch_code, b.lot_number, b.product_id, p.name as product_name
       FROM batches b
       JOIN products p ON b.product_id = p.id
       JOIN trolleys t ON b.id = t.batch_id
@@ -434,7 +513,6 @@ app.get('/api/packaging/active', async (req, res) => {
     }
 });
 
-// 2. Daj mi kolica za određenu seriju (Samo ona koja NISU spakovana)
 app.get('/api/packaging/batches/:id/trolleys', async (req, res) => {
     const { id } = req.params;
     try {
@@ -452,7 +530,24 @@ app.get('/api/packaging/batches/:id/trolleys', async (req, res) => {
     }
 });
 
-// 3. IZVRŠI PAKOVANJE (Action)
+app.post('/api/packaging/lookup', async (req, res) => {
+    const { lot, trolleyNum } = req.body;
+    try {
+        const query = `
+      SELECT 
+        t.id as trolley_id, t.trolley_number, t.tare_weight, t.stick_count, 
+        b.id as batch_id, b.batch_code, b.product_id,
+        (SELECT gross_weight FROM measurements m WHERE m.trolley_id = t.id AND m.phase = 'PROIZVODNJA' LIMIT 1) as start_gross
+      FROM trolleys t
+      JOIN batches b ON t.batch_id = b.id
+      WHERE b.lot_number = $1 AND t.trolley_number = $2 AND t.is_packed = FALSE AND b.is_active = TRUE;
+    `;
+        const result = await pool.query(query, [lot, trolleyNum]);
+        if (result.rows.length > 0) res.json({ success: true, data: result.rows[0] });
+        else res.json({ success: false, message: 'Kolica nisu pronađena ili su već spakovana.' });
+    } catch (err) { console.error(err); res.status(500).json({ success: false }); }
+});
+
 app.post('/api/packaging/pack', async (req, res) => {
     const { trolleyId, weight, ph, date, batchId } = req.body;
     const client = await pool.connect();
@@ -460,25 +555,17 @@ app.post('/api/packaging/pack', async (req, res) => {
     try {
         await client.query('BEGIN');
 
-        // A) Upiši merenje (Faza PAKOVANJE)
         await client.query(
             `INSERT INTO measurements (trolley_id, gross_weight, ph_value, phase, measured_at)
        VALUES ($1, $2, $3, 'PAKOVANJE', $4)`,
             [trolleyId, weight, ph, date || 'NOW()']
         );
 
-        // B) Označi kolica kao spakovana
         await client.query('UPDATE trolleys SET is_packed = TRUE WHERE id = $1', [trolleyId]);
 
-        // C) PROVERA: Da li ima još nespakovanih kolica?
-        const checkRes = await client.query(
-            'SELECT COUNT(*) as remaining FROM trolleys WHERE batch_id = $1 AND is_packed = FALSE',
-            [batchId]
-        );
-
+        const checkRes = await client.query('SELECT COUNT(*) as remaining FROM trolleys WHERE batch_id = $1 AND is_packed = FALSE', [batchId]);
         let batchStatus = 'active';
         if (parseInt(checkRes.rows[0].remaining) === 0) {
-            // Nema više kolica -> Deaktiviraj seriju
             await client.query('UPDATE batches SET is_active = FALSE WHERE id = $1', [batchId]);
             batchStatus = 'closed';
         }
@@ -495,45 +582,8 @@ app.post('/api/packaging/pack', async (req, res) => {
     }
 });
 
-// 4. PRETRAGA KOLICA PO LOT-u I BROJU (Za Wizard Pakovanja)
-app.post('/api/packaging/lookup', async (req, res) => {
-    const { lot, trolleyNum } = req.body;
-    try {
-        const query = `
-      SELECT 
-        t.id as trolley_id, 
-        t.trolley_number, 
-        t.tare_weight, 
-        t.stick_count, 
-        b.id as batch_id,
-        b.batch_code,
-        b.product_id,
-        -- Treba nam startna masa za proračun kala
-        (SELECT gross_weight FROM measurements m WHERE m.trolley_id = t.id AND m.phase = 'PROIZVODNJA' LIMIT 1) as start_gross
-      FROM trolleys t
-      JOIN batches b ON t.batch_id = b.id
-      WHERE b.lot_number = $1 
-        AND t.trolley_number = $2 
-        AND t.is_packed = FALSE -- Samo ako nisu već spakovana
-        AND b.is_active = TRUE;
-    `;
-
-        const result = await pool.query(query, [lot, trolleyNum]);
-
-        if (result.rows.length > 0) {
-            res.json({ success: true, data: result.rows[0] });
-        } else {
-            res.json({ success: false, message: 'Kolica nisu pronađena ili su već spakovana.' });
-        }
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ success: false, message: 'Greška na serveru.' });
-    }
-});
-
-
 // --------------------------
-// H) KORISNICI (USERS)
+// I) KORISNICI
 // --------------------------
 
 app.get('/api/users', async (req, res) => {
@@ -561,31 +611,17 @@ app.post('/api/users', async (req, res) => {
     }
 });
 
-app.delete('/api/users/:id', async (req, res) => {
-    const { id } = req.params;
-    try {
-        await pool.query('DELETE FROM users WHERE id = $1', [id]);
-        res.json({ success: true });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ success: false });
-    }
-});
-
-// Izmeni korisnika (Edit User)
 app.put('/api/users/:id', async (req, res) => {
     const { id } = req.params;
     const { username, password, role, first_name, last_name } = req.body;
 
     try {
         if (password && password.trim() !== '') {
-            // Slučaj 1: Menjamo i lozinku
             await pool.query(
                 'UPDATE users SET username=$1, password=$2, role=$3, first_name=$4, last_name=$5 WHERE id=$6',
                 [username, password, role, first_name, last_name, id]
             );
         } else {
-            // Slučaj 2: Lozinka ostaje ista (ne diramo je)
             await pool.query(
                 'UPDATE users SET username=$1, role=$2, first_name=$3, last_name=$4 WHERE id=$5',
                 [username, role, first_name, last_name, id]
@@ -596,6 +632,17 @@ app.put('/api/users/:id', async (req, res) => {
         console.error(err);
         if (err.code === '23505') res.status(400).json({ success: false, message: 'Korisničko ime već postoji!' });
         else res.status(500).json({ success: false, message: 'Greška na serveru.' });
+    }
+});
+
+app.delete('/api/users/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        await pool.query('DELETE FROM users WHERE id = $1', [id]);
+        res.json({ success: true });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false });
     }
 });
 
