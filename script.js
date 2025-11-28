@@ -505,11 +505,15 @@ document.addEventListener('DOMContentLoaded', () => {
         if (daysLeft <= 0) { statusColor = '#16a34a'; statusText = 'SPREMNO'; }
         else if (daysLeft < 5) { statusColor = '#d97706'; statusText = 'Uskoro'; }
 
+        // --- IZMENA OVDE: active_trolleys / total_trolleys ---
+        const activeCount = batch.active_trolleys || 0;
+        const totalCount = batch.total_trolleys || 0;
+
         div.innerHTML = `
             <div class="batch-code">${batch.batch_code}</div>
             <div class="batch-info-row">
                 <span>${batch.product_name}</span>
-                <strong>${batch.trolley_count} ram.</strong>
+                <strong>${activeCount} / ${totalCount} ram.</strong>
             </div>
             <div style="margin-top:4px; font-size:0.75rem; color:${statusColor}; font-weight:600;">
                 Dan ${batch.days_old} / ${batch.target_duration_days} (${statusText})
@@ -522,17 +526,32 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateDashboard() {
         const stats = {};
         let total = 0;
+
         batches.forEach(b => {
-            stats[b.product_name] = (stats[b.product_name] || 0) + parseInt(b.trolley_count);
-            total += parseInt(b.trolley_count);
+            // OVDE JE BILA GREŠKA:
+            // Ranije je bilo 'b.trolley_count', sada koristimo 'b.active_trolleys'
+            // Želimo da saberemo samo kolica koja su TRENUTNO u pogonu.
+            const count = parseInt(b.active_trolleys || 0);
+
+            stats[b.product_name] = (stats[b.product_name] || 0) + count;
+            total += count;
         });
+
         const board = document.getElementById('statsContent');
         if (board) {
             board.innerHTML = '';
             for (const [name, count] of Object.entries(stats)) {
-                board.innerHTML += `<div class="stat-card"><div class="stat-label">${name}</div><div class="stat-value">${count}</div></div>`;
+                // Prikazujemo samo ako ima proizvoda (da ne gušimo ekran nulama)
+                if (count > 0) {
+                    board.innerHTML += `
+                        <div class="stat-card">
+                            <div class="stat-label">${name}</div>
+                            <div class="stat-value">${count}</div>
+                        </div>`;
+                }
             }
         }
+
         const summary = document.getElementById('totalSummary');
         if (summary) summary.textContent = `Ukupno u pogonu: ${total} ramova`;
     }

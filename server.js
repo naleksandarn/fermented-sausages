@@ -71,7 +71,8 @@ app.get('/api/dashboard', async (req, res) => {
         b.current_chamber,
         p.name as product_name,
         p.target_duration_days,
-        COUNT(t.id) as trolley_count,
+        COUNT(t.id) as total_trolleys, -- Ukupan broj kolica ikada napravljenih za ovu seriju
+        COUNT(CASE WHEN t.is_packed = FALSE THEN 1 END) as active_trolleys, -- Broj kolica koja su još u pogonu
         (CURRENT_DATE - b.production_date) as days_old,
         (p.target_duration_days - (CURRENT_DATE - b.production_date)) as days_remaining
       FROM batches b
@@ -81,6 +82,29 @@ app.get('/api/dashboard', async (req, res) => {
       GROUP BY b.id, b.lot_number, p.name, p.target_duration_days, b.production_date
       ORDER BY b.production_date ASC;
     `;
+        const result = await pool.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Server error');
+    }
+});
+
+// NOVO: RUTA ZA ARHIVIRANE SERIJE (MONITORING)
+app.get('/api/batches/archived', async (req, res) => {
+    try {
+        const query = `
+        SELECT 
+            b.id, 
+            b.batch_code, 
+            b.lot_number, 
+            p.name as product_name
+        FROM batches b
+        JOIN products p ON b.product_id = p.id
+        WHERE b.is_active = FALSE
+        ORDER BY b.production_date DESC
+        LIMIT 100; -- Limitiramo na poslednjih 100 da ne preopteretimo listu
+        `;
         const result = await pool.query(query);
         res.json(result.rows);
     } catch (err) {

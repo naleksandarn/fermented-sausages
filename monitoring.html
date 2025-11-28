@@ -8,6 +8,32 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         /* --- SIDEBAR STILOVI --- */
+        .sidebar-tabs {
+            display: flex;
+            padding: 10px 15px 0 15px;
+            gap: 10px;
+            background-color: #f8fafc;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #cbd5e1;
+            background-color: #fff;
+            color: #64748b;
+            cursor: pointer;
+            border-radius: 6px 6px 0 0;
+            font-weight: 600;
+            border-bottom: none;
+            transition: all 0.2s;
+        }
+
+        .tab-btn.active {
+            background-color: #2563eb;
+            color: white;
+            border-color: #2563eb;
+        }
+
         .sidebar-search {
             padding: 15px;
             background-color: #f8fafc;
@@ -19,14 +45,11 @@
 
         .sidebar-search input {
             padding: 12px;
-            /* Povećan padding */
             border: 1px solid #cbd5e1;
             border-radius: 6px;
             font-size: 1rem;
-            /* Povećan font */
             width: 100%;
             box-sizing: border-box;
-            transition: border-color 0.2s;
         }
 
         .sidebar-search input:focus {
@@ -84,6 +107,11 @@
             <div class="sidebar">
                 <div class="sidebar-header">Izaberite Seriju</div>
 
+                <div class="sidebar-tabs">
+                    <button id="tabActive" class="tab-btn active" onclick="switchTab('active')">Aktivne</button>
+                    <button id="tabArchived" class="tab-btn" onclick="switchTab('archived')">Arhiva</button>
+                </div>
+
                 <div class="sidebar-search">
                     <input type="text" id="searchBatch" placeholder="🔍 Pretraži Seriju...">
                     <input type="text" id="searchLot" placeholder="🔍 Pretraži LOT...">
@@ -107,37 +135,61 @@
         const API_URL = '/api';
         let myChart = null;
         let allBatchesData = [];
+        let currentMode = 'active'; // 'active' ili 'archived'
 
         document.addEventListener('DOMContentLoaded', async () => {
             const user = JSON.parse(localStorage.getItem('currentUser'));
             if (!user) window.location.href = 'login.html';
 
-            await loadBatches();
+            // Učitaj default (Aktivne)
+            await loadBatches('active');
 
             // Event listeneri
             document.getElementById('searchBatch').addEventListener('input', filterBatches);
             document.getElementById('searchLot').addEventListener('input', filterBatches);
 
-            // Dugme Poništi
             document.getElementById('resetBtn').addEventListener('click', () => {
                 document.getElementById('searchBatch').value = '';
                 document.getElementById('searchLot').value = '';
-                filterBatches(); // Ovo će sakriti dugme i vratiti listu
+                filterBatches();
             });
         });
 
-        // 1. Učitaj listu serija
-        async function loadBatches() {
+        // 1. Promena Taba
+        async function switchTab(mode) {
+            currentMode = mode;
+
+            // UI Promene
+            document.getElementById('tabActive').classList.toggle('active', mode === 'active');
+            document.getElementById('tabArchived').classList.toggle('active', mode === 'archived');
+
+            // Reset pretrage pri promeni taba
+            document.getElementById('searchBatch').value = '';
+            document.getElementById('searchLot').value = '';
+            document.getElementById('resetBtn').style.display = 'none';
+
+            // Učitavanje podataka
+            await loadBatches(mode);
+        }
+
+        // 2. Učitaj listu serija (sa odgovarajuće rute)
+        async function loadBatches(mode) {
+            const list = document.getElementById('batchList');
+            list.innerHTML = '<li style="padding:20px; text-align:center;">Učitavanje...</li>';
+
             try {
-                const res = await fetch(`${API_URL}/dashboard`);
+                let url = (mode === 'active') ? `${API_URL}/dashboard` : `${API_URL}/batches/archived`;
+
+                const res = await fetch(url);
                 allBatchesData = await res.json();
                 renderBatchList(allBatchesData);
             } catch (err) {
                 console.error(err);
+                list.innerHTML = '<li style="color:red; padding:20px;">Greška pri učitavanju.</li>';
             }
         }
 
-        // 2. Renderovanje liste
+        // 3. Renderovanje liste
         function renderBatchList(data) {
             const list = document.getElementById('batchList');
             list.innerHTML = '';
@@ -150,6 +202,10 @@
             data.forEach(b => {
                 const li = document.createElement('li');
                 li.className = 'batch-list-item';
+
+                // Za aktivne imamo info o kolicima, za arhivu možda nemamo
+                // (zavisi od backend query-ja), pa ćemo prikazati šta imamo.
+
                 li.innerHTML = `
                     <div style="font-weight:bold; color:#1e293b; font-size:1.1rem;">${b.batch_code}</div>
                     <div style="font-size:0.9rem; color:#64748b;">${b.product_name}</div>
@@ -160,18 +216,14 @@
             });
         }
 
-        // 3. Logika filtriranja
+        // 4. Logika filtriranja
         function filterBatches() {
             const sBatch = document.getElementById('searchBatch').value.toLowerCase();
             const sLot = document.getElementById('searchLot').value.toLowerCase();
             const resetBtn = document.getElementById('resetBtn');
 
-            // Prikaži dugme "Poništi" samo ako ima nekog teksta
-            if (sBatch || sLot) {
-                resetBtn.style.display = 'block';
-            } else {
-                resetBtn.style.display = 'none';
-            }
+            if (sBatch || sLot) resetBtn.style.display = 'block';
+            else resetBtn.style.display = 'none';
 
             const filtered = allBatchesData.filter(b => {
                 const matchBatch = b.batch_code.toLowerCase().includes(sBatch);
@@ -182,7 +234,7 @@
             renderBatchList(filtered);
         }
 
-        // 4. Klik na seriju
+        // 5. Klik na seriju
         async function selectBatch(batch, element) {
             document.querySelectorAll('.batch-list-item').forEach(el => el.classList.remove('active'));
             element.classList.add('active');
@@ -196,7 +248,7 @@
             } catch (err) { console.error(err); }
         }
 
-        // 5. Obrada podataka i crtanje
+        // 6. Obrada podataka i crtanje
         function processAndRenderChart(data) {
             const dailyStats = {};
 
