@@ -125,6 +125,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+
     // Listeneri za auto-generisanje koda
     const prodSelect = document.getElementById('productType');
     const dateInput = document.getElementById('productionDate');
@@ -143,8 +144,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Navigacija Wizarda
-    if (nextBtn) nextBtn.addEventListener('click', () => { if (validateStep(currentStep)) { currentStep++; updateWizardUI(); } });
-    if (prevBtn) prevBtn.addEventListener('click', () => { if (currentStep > 1) { currentStep--; updateWizardUI(); } });
+    if (batchForm) {
+        if (nextBtn) nextBtn.addEventListener('click', () => { if (validateStep(currentStep)) { currentStep++; updateWizardUI(); } });
+        if (prevBtn) prevBtn.addEventListener('click', () => { if (currentStep > 1) { currentStep--; updateWizardUI(); } });
+    }
 
     // Toggle Mode
     if (toggleWizardBtn) {
