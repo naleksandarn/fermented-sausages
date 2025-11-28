@@ -24,10 +24,9 @@ const pool = new Pool({
 app.use(cors());
 app.use(bodyParser.json());
 
-// Serviranje statičkih fajlova (HTML/CSS/JS)
+// Serviranje statičkih fajlova
 app.use(express.static(__dirname));
 
-// Root ruta vodi na login
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'login.html'));
 });
@@ -59,7 +58,7 @@ app.post('/api/login', async (req, res) => {
 });
 
 // --------------------------
-// B) DASHBOARD LISTA (HOME & MEASUREMENTS)
+// B) DASHBOARD & LISTE
 // --------------------------
 app.get('/api/dashboard', async (req, res) => {
     try {
@@ -71,8 +70,8 @@ app.get('/api/dashboard', async (req, res) => {
         b.current_chamber,
         p.name as product_name,
         p.target_duration_days,
-        COUNT(t.id) as total_trolleys, -- Ukupan broj kolica ikada napravljenih za ovu seriju
-        COUNT(CASE WHEN t.is_packed = FALSE THEN 1 END) as active_trolleys, -- Broj kolica koja su još u pogonu
+        COUNT(t.id) as total_trolleys, 
+        COUNT(CASE WHEN t.is_packed = FALSE THEN 1 END) as active_trolleys,
         (CURRENT_DATE - b.production_date) as days_old,
         (p.target_duration_days - (CURRENT_DATE - b.production_date)) as days_remaining
       FROM batches b
@@ -90,7 +89,6 @@ app.get('/api/dashboard', async (req, res) => {
     }
 });
 
-// NOVO: RUTA ZA ARHIVIRANE SERIJE (MONITORING)
 app.get('/api/batches/archived', async (req, res) => {
     try {
         const query = `
@@ -103,7 +101,7 @@ app.get('/api/batches/archived', async (req, res) => {
         JOIN products p ON b.product_id = p.id
         WHERE b.is_active = FALSE
         ORDER BY b.production_date DESC
-        LIMIT 100; -- Limitiramo na poslednjih 100 da ne preopteretimo listu
+        LIMIT 100;
         `;
         const result = await pool.query(query);
         res.json(result.rows);
@@ -114,13 +112,12 @@ app.get('/api/batches/archived', async (req, res) => {
 });
 
 // --------------------------
-// C) ANALITIKA (DASHBOARD.HTML)
+// C) ANALITIKA
 // --------------------------
 app.get('/api/analytics', async (req, res) => {
     try {
         const client = await pool.connect();
 
-        // 1. KPI: Ukupno Tura i Kolica
         const kpiRes = await client.query(`
       SELECT 
         COUNT(DISTINCT b.id) as total_batches,
@@ -130,7 +127,6 @@ app.get('/api/analytics', async (req, res) => {
       WHERE b.is_active = TRUE
     `);
 
-        // 2. KPI: Ukupna Masa (Trenutna u pogonu)
         const weightRes = await client.query(`
         SELECT SUM(m.gross_weight) as total_weight
         FROM measurements m
@@ -143,7 +139,6 @@ app.get('/api/analytics', async (req, res) => {
         WHERE b.is_active = TRUE
     `);
 
-        // 3. GRAFIK 1: Kolica po proizvodima
         const trolleysPerProductRes = await client.query(`
         SELECT p.name, COUNT(t.id) as count
         FROM trolleys t
@@ -153,7 +148,6 @@ app.get('/api/analytics', async (req, res) => {
         GROUP BY p.name ORDER BY count DESC
     `);
 
-        // 4. GRAFIK 2: Struktura proizvodnje
         const batchesPerProductRes = await client.query(`
         SELECT p.name, COUNT(b.id) as count
         FROM batches b
@@ -162,7 +156,6 @@ app.get('/api/analytics', async (req, res) => {
         GROUP BY p.name
     `);
 
-        // 5. LISTA AKTIVNIH SERIJA (ZA RASPORED PAKOVANJA)
         const activeListRes = await client.query(`
         SELECT 
             b.id, b.batch_code, b.production_date, b.lot_number,
@@ -182,7 +175,6 @@ app.get('/api/analytics', async (req, res) => {
         ORDER BY days_remaining ASC
     `);
 
-        // 6. DETALJNA STATISTIKA PO PROIZVODIMA (TAB 2)
         const productDetailsRes = await client.query(`
         SELECT 
             p.name, 
@@ -197,7 +189,6 @@ app.get('/api/analytics', async (req, res) => {
         GROUP BY p.name, p.standard_loss_percentage
     `);
 
-        // 7. ISTORIJA KALA (TAB 4 - ZAVRŠENE SERIJE)
         const historyRes = await client.query(`
         SELECT 
             b.batch_code,
@@ -225,7 +216,7 @@ app.get('/api/analytics', async (req, res) => {
             },
             activeList: activeListRes.rows,
             productStats: productDetailsRes.rows,
-            historyStats: historyRes.rows, // <--- NOVO
+            historyStats: historyRes.rows,
             charts: {
                 trolleysByProduct: trolleysPerProductRes.rows,
                 structure: batchesPerProductRes.rows
@@ -241,7 +232,6 @@ app.get('/api/analytics', async (req, res) => {
 // --------------------------
 // D) UPRAVLJANJE SERIJAMA
 // --------------------------
-
 app.post('/api/batches', async (req, res) => {
     const client = await pool.connect();
     try {
@@ -250,7 +240,7 @@ app.post('/api/batches', async (req, res) => {
         const { productCode, batchCode, lotNumber, trolleysCount, chamber, productionDate } = req.body;
 
         const prodRes = await client.query(
-            'SELECT id, default_trolley_weight, default_stick_count, default_piece_count FROM products WHERE code = $1',
+            'SELECT id, name, default_trolley_weight, default_stick_count, default_piece_count FROM products WHERE code = $1',
             [productCode]
         );
         if (prodRes.rows.length === 0) throw new Error('Nepoznat proizvod');
@@ -270,6 +260,11 @@ app.post('/api/batches', async (req, res) => {
             );
         }
 
+        // NOTIFIKACIJA: NOVA SERIJA
+        const msg = `Nova serija kreirana: ${batchCode} (${product.name})`;
+        await client.query("INSERT INTO notifications (target_role, message) VALUES ('admin', $1)", [msg]);
+        await client.query("INSERT INTO notifications (target_role, message) VALUES ('ceo', $1)", [msg]);
+
         await client.query('COMMIT');
         res.json({ success: true, batchId });
 
@@ -287,11 +282,7 @@ app.get('/api/batches/:id/details', async (req, res) => {
     try {
         const query = `
       SELECT 
-        t.id,
-        t.trolley_number,
-        t.tare_weight,
-        t.stick_count,
-        p.default_piece_count, 
+        t.id, t.trolley_number, t.tare_weight, t.stick_count, p.default_piece_count, 
         (SELECT gross_weight FROM measurements m WHERE m.trolley_id = t.id AND m.phase = 'PROIZVODNJA' LIMIT 1) as start_gross,
         (SELECT gross_weight FROM measurements m WHERE m.trolley_id = t.id ORDER BY m.measured_at DESC LIMIT 1) as current_gross,
         (SELECT piece_count FROM measurements m WHERE m.trolley_id = t.id ORDER BY m.measured_at DESC LIMIT 1) as current_pieces,
@@ -304,10 +295,7 @@ app.get('/api/batches/:id/details', async (req, res) => {
     `;
         const result = await pool.query(query, [id]);
         res.json(result.rows);
-    } catch (err) {
-        console.error(err);
-        res.status(500).send('Server error');
-    }
+    } catch (err) { console.error(err); res.status(500).send('Server error'); }
 });
 
 app.get('/api/batches/:id/history', async (req, res) => {
@@ -315,15 +303,8 @@ app.get('/api/batches/:id/history', async (req, res) => {
     try {
         const query = `
       SELECT 
-        m.id as measurement_id,
-        m.measured_at,
-        m.phase,
-        m.gross_weight,
-        m.ph_value,
-        m.piece_count,
-        t.trolley_number,
-        t.tare_weight,
-        t.stick_count,
+        m.id as measurement_id, m.measured_at, m.phase, m.gross_weight, m.ph_value, m.piece_count,
+        t.trolley_number, t.tare_weight, t.stick_count,
         (SELECT gross_weight FROM measurements start_m WHERE start_m.trolley_id = t.id AND start_m.phase = 'PROIZVODNJA' LIMIT 1) as start_gross
       FROM measurements m
       JOIN trolleys t ON m.trolley_id = t.id
@@ -332,10 +313,7 @@ app.get('/api/batches/:id/history', async (req, res) => {
     `;
         const result = await pool.query(query, [id]);
         res.json(result.rows);
-    } catch (err) {
-        console.error(err);
-        res.status(500).send('Server error');
-    }
+    } catch (err) { console.error(err); res.status(500).send('Server error'); }
 });
 
 app.put('/api/batches/:id/move', async (req, res) => {
@@ -344,10 +322,7 @@ app.put('/api/batches/:id/move', async (req, res) => {
     try {
         await pool.query('UPDATE batches SET current_chamber = $1 WHERE id = $2', [chamber, id]);
         res.json({ success: true });
-    } catch (err) {
-        console.error(err);
-        res.status(500).send('Server error');
-    }
+    } catch (err) { console.error(err); res.status(500).send('Server error'); }
 });
 
 app.delete('/api/batches/:id', async (req, res) => {
@@ -355,16 +330,12 @@ app.delete('/api/batches/:id', async (req, res) => {
     try {
         await pool.query('DELETE FROM batches WHERE id = $1', [id]);
         res.json({ success: true });
-    } catch (err) {
-        console.error(err);
-        res.status(500).send('Server error');
-    }
+    } catch (err) { console.error(err); res.status(500).send('Server error'); }
 });
 
 // --------------------------
 // E) MERENJA (CORE LOGIC)
 // --------------------------
-
 app.post('/api/measurements', async (req, res) => {
     const { trolleyId, weight, ph, phase, pieces, stickCount, tare, weightProduction, date } = req.body;
     const client = await pool.connect();
@@ -372,10 +343,12 @@ app.post('/api/measurements', async (req, res) => {
         await client.query('BEGIN');
         const measureDate = date ? date : 'NOW()';
 
+        // Update kolica (ako ima izmena tare/štapova)
         if (stickCount !== undefined || tare !== undefined) {
             await client.query('UPDATE trolleys SET stick_count = COALESCE($1, stick_count), tare_weight = COALESCE($2, tare_weight) WHERE id = $3', [stickCount, tare, trolleyId]);
         }
 
+        // Logic za PROIZVODNJU (Start masa)
         if (weightProduction !== undefined && weightProduction !== null) {
             const check = await client.query("SELECT id FROM measurements WHERE trolley_id = $1 AND phase = 'PROIZVODNJA'", [trolleyId]);
             if (check.rows.length > 0) {
@@ -390,12 +363,35 @@ app.post('/api/measurements', async (req, res) => {
             }
         }
 
+        // Logic za MONITORING (pH, Kalo)
         if (weight || ph) {
             await client.query(
                 `INSERT INTO measurements (trolley_id, gross_weight, ph_value, piece_count, phase, measured_at)
-           VALUES ($1, $2, $3, $4, $5, $6)`,
+       VALUES ($1, $2, $3, $4, $5, $6)`,
                 [trolleyId, weight, ph, pieces, phase, measureDate]
             );
+
+            // --- NOVO: NOTIFIKACIJA ZA MERENJE ---
+            // Dohvatamo podatke o seriji da poruka bude jasna
+            const infoRes = await client.query(`
+                SELECT b.batch_code, t.trolley_number 
+                FROM trolleys t
+                JOIN batches b ON t.batch_id = b.id
+                WHERE t.id = $1
+            `, [trolleyId]);
+
+            if (infoRes.rows.length > 0) {
+                const info = infoRes.rows[0];
+                let details = [];
+                if (ph) details.push(`pH: ${ph}`);
+                if (weight) details.push(`Masa: ${weight}kg`);
+
+                const msg = `Novo merenje (${info.batch_code}, Ram #${info.trolley_number}): ${details.join(', ')}`;
+
+                await client.query("INSERT INTO notifications (target_role, message) VALUES ('admin', $1)", [msg]);
+                await client.query("INSERT INTO notifications (target_role, message) VALUES ('ceo', $1)", [msg]);
+            }
+            // -------------------------------------
         }
 
         await client.query('COMMIT');
@@ -418,10 +414,7 @@ app.put('/api/measurements/:id', async (req, res) => {
             [weight, ph, pieces, date, id]
         );
         res.json({ success: true });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ success: false });
-    }
+    } catch (err) { console.error(err); res.status(500).json({ success: false }); }
 });
 
 app.delete('/api/measurements_row/:id', async (req, res) => {
@@ -429,16 +422,12 @@ app.delete('/api/measurements_row/:id', async (req, res) => {
     try {
         await pool.query('DELETE FROM measurements WHERE id = $1', [id]);
         res.json({ success: true });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ success: false });
-    }
+    } catch (err) { console.error(err); res.status(500).json({ success: false }); }
 });
 
 // --------------------------
 // F) KOLICA (TROLLEYS)
 // --------------------------
-
 app.post('/api/batches/:id/trolleys', async (req, res) => {
     const { id } = req.params;
     const { tare, sticks } = req.body;
@@ -450,10 +439,7 @@ app.post('/api/batches/:id/trolleys', async (req, res) => {
             [id, nextNum, tare || 40.0, sticks || 0]
         );
         res.json({ success: true, newNumber: nextNum, id: insertRes.rows[0].id });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ success: false });
-    }
+    } catch (err) { console.error(err); res.status(500).json({ success: false }); }
 });
 
 app.delete('/api/trolleys/:id', async (req, res) => {
@@ -461,24 +447,17 @@ app.delete('/api/trolleys/:id', async (req, res) => {
     try {
         await pool.query('DELETE FROM trolleys WHERE id = $1', [id]);
         res.json({ success: true });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ success: false });
-    }
+    } catch (err) { console.error(err); res.status(500).json({ success: false }); }
 });
 
 // --------------------------
-// G) PROIZVODI (PRODUCTS)
+// G) PROIZVODI
 // --------------------------
-
 app.get('/api/products', async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM products ORDER BY id ASC');
         res.json(result.rows);
-    } catch (err) {
-        console.error(err);
-        res.status(500).send('Server error');
-    }
+    } catch (err) { console.error(err); res.status(500).send('Server error'); }
 });
 
 app.post('/api/products', async (req, res) => {
@@ -509,16 +488,12 @@ app.delete('/api/products/:id', async (req, res) => {
     try {
         await pool.query('DELETE FROM products WHERE id = $1', [id]);
         res.json({ success: true });
-    } catch (err) {
-        console.error(err);
-        res.status(400).json({ success: false, message: 'Ne mogu obrisati proizvod koji se koristi!' });
-    }
+    } catch (err) { console.error(err); res.status(400).json({ success: false, message: 'Ne mogu obrisati proizvod koji se koristi!' }); }
 });
 
 // --------------------------
 // H) PAKOVANJE
 // --------------------------
-
 app.get('/api/packaging/active', async (req, res) => {
     try {
         const query = `
@@ -531,10 +506,7 @@ app.get('/api/packaging/active', async (req, res) => {
     `;
         const result = await pool.query(query);
         res.json(result.rows);
-    } catch (err) {
-        console.error(err);
-        res.status(500).send('Server error');
-    }
+    } catch (err) { console.error(err); res.status(500).send('Server error'); }
 });
 
 app.get('/api/packaging/batches/:id/trolleys', async (req, res) => {
@@ -548,10 +520,7 @@ app.get('/api/packaging/batches/:id/trolleys', async (req, res) => {
     `;
         const result = await pool.query(query, [id]);
         res.json(result.rows);
-    } catch (err) {
-        console.error(err);
-        res.status(500).send('Server error');
-    }
+    } catch (err) { console.error(err); res.status(500).send('Server error'); }
 });
 
 app.post('/api/packaging/lookup', async (req, res) => {
@@ -594,6 +563,22 @@ app.post('/api/packaging/pack', async (req, res) => {
             batchStatus = 'closed';
         }
 
+        // --- NOVO: NOTIFIKACIJA ZA PAKOVANJE ---
+        const infoRes = await client.query(`
+            SELECT b.batch_code, t.trolley_number 
+            FROM trolleys t
+            JOIN batches b ON t.batch_id = b.id
+            WHERE t.id = $1
+        `, [trolleyId]);
+
+        if (infoRes.rows.length > 0) {
+            const info = infoRes.rows[0];
+            const msg = `Pakovanje (${info.batch_code}): Ram #${info.trolley_number} spakovan. Neto izlaz: ${weight}kg`;
+            await client.query("INSERT INTO notifications (target_role, message) VALUES ('admin', $1)", [msg]);
+            await client.query("INSERT INTO notifications (target_role, message) VALUES ('ceo', $1)", [msg]);
+        }
+        // ---------------------------------------
+
         await client.query('COMMIT');
         res.json({ success: true, batchStatus });
 
@@ -609,15 +594,11 @@ app.post('/api/packaging/pack', async (req, res) => {
 // --------------------------
 // I) KORISNICI
 // --------------------------
-
 app.get('/api/users', async (req, res) => {
     try {
         const result = await pool.query('SELECT id, username, role, first_name, last_name FROM users ORDER BY id ASC');
         res.json(result.rows);
-    } catch (err) {
-        console.error(err);
-        res.status(500).send('Server error');
-    }
+    } catch (err) { console.error(err); res.status(500).send('Server error'); }
 });
 
 app.post('/api/users', async (req, res) => {
@@ -638,7 +619,6 @@ app.post('/api/users', async (req, res) => {
 app.put('/api/users/:id', async (req, res) => {
     const { id } = req.params;
     const { username, password, role, first_name, last_name } = req.body;
-
     try {
         if (password && password.trim() !== '') {
             await pool.query(
@@ -664,10 +644,29 @@ app.delete('/api/users/:id', async (req, res) => {
     try {
         await pool.query('DELETE FROM users WHERE id = $1', [id]);
         res.json({ success: true });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ success: false });
-    }
+    } catch (err) { console.error(err); res.status(500).json({ success: false }); }
+});
+
+// --------------------------
+// J) NOTIFIKACIJE
+// --------------------------
+app.get('/api/notifications', async (req, res) => {
+    const { role } = req.query;
+    try {
+        const result = await pool.query(
+            "SELECT * FROM notifications WHERE target_role = $1 AND is_read = FALSE ORDER BY created_at DESC",
+            [role]
+        );
+        res.json(result.rows);
+    } catch (err) { console.error(err); res.status(500).json([]); }
+});
+
+app.put('/api/notifications/read', async (req, res) => {
+    const { role } = req.body;
+    try {
+        await pool.query("UPDATE notifications SET is_read = TRUE WHERE target_role = $1", [role]);
+        res.json({ success: true });
+    } catch (err) { console.error(err); res.status(500).json({ success: false }); }
 });
 
 // --------------------------

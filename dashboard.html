@@ -275,6 +275,92 @@
             color: #64748b;
         }
 
+        /* --- NOTIFIKACIJE STILOVI --- */
+        .app-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .notification-wrapper {
+            position: relative;
+            cursor: pointer;
+            margin-right: 20px;
+            display: flex;
+            align-items: center;
+        }
+
+        .bell-icon {
+            font-size: 1.5rem;
+            /* Ako je header taman, dodaj filter: invert(1); */
+        }
+
+        .badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background-color: #ef4444;
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: bold;
+            border: 2px solid white;
+            display: none;
+        }
+
+        .notif-dropdown {
+            position: absolute;
+            top: 40px;
+            right: 0;
+            width: 300px;
+            background: white;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            z-index: 1000;
+            display: none;
+        }
+
+        .notif-header {
+            padding: 10px;
+            background: #f8fafc;
+            border-bottom: 1px solid #e2e8f0;
+            font-weight: bold;
+            color: #334155;
+            border-radius: 8px 8px 0 0;
+        }
+
+        .notif-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .notif-item {
+            padding: 12px;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 0.9rem;
+            color: #475569;
+        }
+
+        .notif-item:hover {
+            background-color: #f1f5f9;
+        }
+
+        .notif-empty {
+            padding: 20px;
+            text-align: center;
+            color: #94a3b8;
+            font-size: 0.9rem;
+        }
+
         @media (max-width: 1200px) {
             .calendar-grid {
                 grid-template-columns: repeat(4, 1fr);
@@ -297,7 +383,21 @@
     <div class="app-container" style="padding-bottom: 0;">
         <header class="app-header">
             <h1>Dashboard</h1>
-            <button onclick="window.location.href='home.html'" class="btn-secondary">🏠 Početna</button>
+
+            <div style="display: flex; align-items: center;">
+                <div class="notification-wrapper" id="notifWrapper">
+                    <span class="bell-icon">🔔</span>
+                    <span class="badge" id="notifBadge">0</span>
+
+                    <div class="notif-dropdown" id="notifDropdown">
+                        <div class="notif-header">Obaveštenja</div>
+                        <ul class="notif-list" id="notifList">
+                        </ul>
+                    </div>
+                </div>
+
+                <button onclick="window.location.href='home.html'" class="btn-secondary">🏠 Početna</button>
+            </div>
         </header>
 
         <div class="dash-container">
@@ -476,7 +576,75 @@
 
         document.addEventListener('DOMContentLoaded', async () => {
             await loadData();
+            // INICIJALIZACIJA NOTIFIKACIJA
+            setupNotifications(user.role);
         });
+
+        // --- NOTIFIKACIJE LOGIKA ---
+        function setupNotifications(role) {
+            const badge = document.getElementById('notifBadge');
+            const list = document.getElementById('notifList');
+            const dropdown = document.getElementById('notifDropdown');
+            const wrapper = document.getElementById('notifWrapper');
+
+            if (!wrapper) return;
+
+            // 1. Provera servera
+            async function checkNotifications() {
+                try {
+                    const res = await fetch(`${API_URL}/notifications?role=${role}`);
+                    const data = await res.json();
+
+                    if (data.length > 0) {
+                        badge.style.display = 'flex';
+                        badge.textContent = data.length > 9 ? '9+' : data.length;
+
+                        list.innerHTML = '';
+                        data.forEach(n => {
+                            const li = document.createElement('li');
+                            li.className = 'notif-item';
+                            const time = new Date(n.created_at).toLocaleTimeString('sr-RS', { hour: '2-digit', minute: '2-digit' });
+                            li.innerHTML = `<div>${n.message}</div><div style="font-size:0.7rem; color:#94a3b8; margin-top:4px;">${time}</div>`;
+                            list.appendChild(li);
+                        });
+                    } else {
+                        badge.style.display = 'none';
+                        list.innerHTML = '<li class="notif-empty">Nema novih obaveštenja</li>';
+                    }
+                } catch (err) { console.error("Notif error", err); }
+            }
+
+            // 2. Klik na zvonce
+            wrapper.addEventListener('click', async () => {
+                const isVisible = dropdown.style.display === 'block';
+
+                if (!isVisible) {
+                    dropdown.style.display = 'block';
+                    // Mark as read
+                    if (badge.style.display !== 'none') {
+                        await fetch(`${API_URL}/notifications/read`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ role })
+                        });
+                        badge.style.display = 'none';
+                    }
+                } else {
+                    dropdown.style.display = 'none';
+                }
+            });
+
+            // 3. Zatvori na klik van
+            document.addEventListener('click', (e) => {
+                if (!wrapper.contains(e.target)) {
+                    dropdown.style.display = 'none';
+                }
+            });
+
+            checkNotifications();
+            setInterval(checkNotifications, 30000);
+        }
+        // ---------------------------
 
         async function loadData() {
             try {
@@ -716,7 +884,7 @@
             if (kaloChartRef) kaloChartRef.destroy();
             const ctx = document.getElementById('kaloChart').getContext('2d');
             kaloChartRef = new Chart(ctx, {
-                type: 'bar', // IZMENJENO U BAR
+                type: 'bar',
                 data: {
                     labels: labels,
                     datasets: [{
